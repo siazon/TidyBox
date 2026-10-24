@@ -7,6 +7,7 @@ public class ElevationClient : IElevationClient
     private readonly string _pipeName;
     private readonly IHelperProcessLauncher _launcher;
     private readonly TimeSpan _connectTimeout;
+    private readonly SemaphoreSlim _gate = new(1, 1);
 
     public ElevationClient(string pipeName, IHelperProcessLauncher launcher, TimeSpan? connectTimeout = null)
     {
@@ -15,7 +16,21 @@ public class ElevationClient : IElevationClient
         _connectTimeout = connectTimeout ?? TimeSpan.FromSeconds(5);
     }
 
+    // Serialized so concurrent callers cannot each decide the helper is not running and each show a UAC prompt.
     public async Task<ElevationResponse> ExecuteAsync(ElevationRequest request, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            return await ExecuteCoreAsync(request, ct);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<ElevationResponse> ExecuteCoreAsync(ElevationRequest request, CancellationToken ct)
     {
         if (!_launcher.IsHelperRunning(_pipeName) && !TryLaunch(out var launchError))
         {

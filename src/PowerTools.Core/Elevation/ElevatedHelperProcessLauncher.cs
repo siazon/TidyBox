@@ -12,7 +12,12 @@ public class ElevatedHelperProcessLauncher : IHelperProcessLauncher
         _helperExePath = helperExePath;
     }
 
-    public bool IsHelperRunning(string pipeName) => File.Exists(@"\.\pipe\" + pipeName);
+    public bool IsHelperRunning(string pipeName) => PipeExists(pipeName);
+
+    // Lists the pipe directory instead of File.Exists: File.Exists opens the pipe, which connects to (and burns)
+    // a listening instance and can make the server's pending accept fail.
+    public static bool PipeExists(string pipeName)
+        => Directory.EnumerateFiles(@"\\.\pipe\").Any(f => string.Equals(Path.GetFileName(f), pipeName, StringComparison.OrdinalIgnoreCase));
 
     // The helper may run as a different admin account, so tell it which SID (ours) may connect to the pipe.
     // Throws Win32Exception if the user declines the UAC prompt; ElevationClient turns that into a failure response.

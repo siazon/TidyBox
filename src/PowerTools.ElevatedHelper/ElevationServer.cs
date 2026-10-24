@@ -37,40 +37,63 @@ public class ElevationServer
 
     public async Task RunAsync(CancellationToken ct)
     {
-        while (!ct.IsCancellationRequested)
+        // Always keep one instance listening: the next one is created before the current connection is handled, so
+        // the pipe name never disappears between requests (clients use its existence to decide whether to launch us).
+        // FirstPipeInstance makes a second helper on the same pipe name fail fast instead of sharing it.
+        var listener = CreatePipe(PipeOptions.Asynchronous | PipeOptions.FirstPipeInstance);
+        try
         {
-            using var pipeServer = NamedPipeServerStreamAcl.Create(
-                _pipeName,
-                PipeDirection.InOut,
-                1,
-                PipeTransmissionMode.Byte,
-                PipeOptions.Asynchronous,
-                0,
-                0,
-                _pipeSecurity);
-
-            // Link the idle timeout directly into the token handed to
-            // WaitForConnectionAsync so the pending accept is actually
-            // cancelled (via CancelIoEx) when the timeout elapses, instead
-            // of merely losing a Task.WhenAny race while it keeps running
-            // in the background.
-            using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            idleCts.CancelAfter(_idleTimeout);
-
-            try
+            while (!ct.IsCancellationRequested)
             {
-                await pipeServer.WaitForConnectionAsync(idleCts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                // Either the caller cancelled RunAsync, or no client connected
-                // within the idle timeout. Either way, exit the accept loop.
-                return;
-            }
+                // Link the idle timeout into the token handed to WaitForConnectionAsync so the pending accept is
+                // actually cancelled (via CancelIoEx) when it elapses, instead of losing a Task.WhenAny race.
+                using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                idleCts.CancelAfter(_idleTimeout);
 
-            await HandleConnectionAsync(pipeServer, ct);
+                try
+                {
+                    await listener.WaitForConnectionAsync(idleCts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Either the caller cancelled RunAsync, or no client connected
+                    // within the idle timeout. Either way, exit the accept loop.
+                    return;
+                }
+                catch (IOException)
+                {
+                    // A client connected and vanished before we accepted it (e.g. a probe or a crashed client).
+                    // Replace the broken instance and keep listening instead of taking the helper down.
+                    var broken = listener;
+                    listener = CreatePipe(PipeOptions.Asynchronous);
+                    broken.Dispose();
+                    continue;
+                }
+
+                var connected = listener;
+                listener = CreatePipe(PipeOptions.Asynchronous);
+                using (connected)
+                {
+                    await HandleConnectionAsync(connected, ct);
+                }
+            }
+        }
+        finally
+        {
+            listener.Dispose();
         }
     }
+
+    private NamedPipeServerStream CreatePipe(PipeOptions options)
+        => NamedPipeServerStreamAcl.Create(
+            _pipeName,
+            PipeDirection.InOut,
+            2,
+            PipeTransmissionMode.Byte,
+            options,
+            0,
+            0,
+            _pipeSecurity);
 
     private async Task HandleConnectionAsync(NamedPipeServerStream pipeServer, CancellationToken ct)
     {

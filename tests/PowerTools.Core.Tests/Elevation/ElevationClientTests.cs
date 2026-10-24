@@ -14,18 +14,20 @@ public class ElevationClientTests
 
     private class FakeLauncher : IHelperProcessLauncher
     {
-        public bool Running;
+        public volatile bool Running;
         public int LaunchCount;
+        public int LaunchDelayMs; // simulates the time the user takes to answer the UAC prompt
         public bool ThrowOnLaunch; // simulates the user clicking "No" on the UAC prompt
         public Action? OnLaunch;
 
         public bool IsHelperRunning(string pipeName) => Running;
         public void LaunchElevated(string pipeName)
         {
-            LaunchCount++;
+            Interlocked.Increment(ref LaunchCount);
             if (ThrowOnLaunch) throw new InvalidOperationException("user declined UAC");
-            Running = true;
+            Thread.Sleep(LaunchDelayMs);
             OnLaunch?.Invoke();
+            Running = true;
         }
     }
 
@@ -90,6 +92,35 @@ public class ElevationClientTests
         var response = await client.ExecuteAsync(new ElevationRequest("echo", "{}"));
 
         Assert.True(response.Success);
+        Assert.Equal(1, launcher.LaunchCount);
+        cts.Cancel();
+    }
+
+    [Fact]
+    public void PipeExists_ReflectsWhetherTheServerIsListening()
+    {
+        var pipeName = "pt-client-" + Guid.NewGuid();
+        using var cts = new CancellationTokenSource();
+        _ = StartServer(pipeName, cts.Token);
+
+        Assert.True(ElevatedHelperProcessLauncher.PipeExists(pipeName));
+        Assert.False(ElevatedHelperProcessLauncher.PipeExists("pt-client-does-not-exist-" + Guid.NewGuid()));
+        cts.Cancel();
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ConcurrentCallsWhileHelperNotRunning_LaunchesOnlyOnce()
+    {
+        var pipeName = "pt-client-" + Guid.NewGuid();
+        using var cts = new CancellationTokenSource();
+        var launcher = new FakeLauncher { Running = false, LaunchDelayMs = 200 };
+        launcher.OnLaunch = () => _ = StartServer(pipeName, cts.Token);
+        var client = new ElevationClient(pipeName, launcher);
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 8)
+            .Select(_ => Task.Run(() => client.ExecuteAsync(new ElevationRequest("echo", "{}")))));
+
+        Assert.All(responses, r => Assert.True(r.Success));
         Assert.Equal(1, launcher.LaunchCount);
         cts.Cancel();
     }
