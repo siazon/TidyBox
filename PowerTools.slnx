@@ -1,8 +1,0 @@
-<Solution>
-  <Folder Name="/src/">
-    <Project Path="src/PowerTools.Core/PowerTools.Core.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/PowerTools.Core.Tests/PowerTools.Core.Tests.csproj" />
-  </Folder>
-</Solution>
