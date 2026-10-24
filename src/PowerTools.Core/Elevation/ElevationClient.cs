@@ -16,6 +16,9 @@ public class ElevationClient : IElevationClient
         _connectTimeout = connectTimeout ?? TimeSpan.FromSeconds(5);
     }
 
+    // A fixed pipe name could be squatted by another process before the helper starts; use a random one per app session.
+    public static string NewSessionPipeName() => "PowerTools." + Guid.NewGuid().ToString("N");
+
     // Serialized so concurrent callers cannot each decide the helper is not running and each show a UAC prompt.
     public async Task<ElevationResponse> ExecuteAsync(ElevationRequest request, CancellationToken ct = default)
     {

@@ -97,6 +97,20 @@ public class ElevationClientTests
     }
 
     [Fact]
+    public void NewSessionPipeName_IsUnpredictableAndPipeSafe()
+    {
+        var names = Enumerable.Range(0, 20).Select(_ => ElevationClient.NewSessionPipeName()).ToList();
+
+        Assert.Equal(20, names.Distinct().Count());
+        Assert.All(names, n =>
+        {
+            Assert.StartsWith("PowerTools.", n);
+            Assert.Matches("^[A-Za-z0-9.]+$", n);
+            Assert.True(n.Length >= "PowerTools.".Length + 32); // 128 bits of randomness
+        });
+    }
+
+    [Fact]
     public void PipeExists_ReflectsWhetherTheServerIsListening()
     {
         var pipeName = "pt-client-" + Guid.NewGuid();
