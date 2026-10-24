@@ -4,6 +4,6 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="PowerTools">
     <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False">
-        <TextBlock x:Name="ContentText" Margin="24" Text="No modules loaded." />
+        <Frame x:Name="ContentFrame" />
     </NavigationView>
 </Window>
