@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PowerTools.Core\PowerTools.Core.csproj" />
+    <ProjectReference Include="..\PowerTools.Modules.DiskAnalyzer\PowerTools.Modules.DiskAnalyzer.csproj" />
     <ProjectReference Include="..\PowerTools.ElevatedHelper\PowerTools.ElevatedHelper.csproj" ReferenceOutputAssembly="false" OutputItemType="ElevatedHelperAssembly" />
   </ItemGroup>
 
