@@ -323,6 +323,7 @@ git commit -m "feat: add elevated helper process with named-pipe IPC server"
 - Create: `src/PowerTools.Core/Elevation/ElevationClient.cs`
 - Create: `src/PowerTools.Core/Elevation/IHelperProcessLauncher.cs`
 - Test: `tests/PowerTools.Core.Tests/Elevation/ElevationClientTests.cs`
+- Modify: `tests/PowerTools.Core.Tests/PowerTools.Core.Tests.csproj`（加一条对`src/PowerTools.ElevatedHelper`的项目引用——Task 3的`ElevationServer`定义在那个项目里，本任务的测试要启动一个真实`ElevationServer`来验证`ElevationClient`，这个引用在之前任何任务里都没加过，是本任务必须补的前置步骤）
 
 **Interfaces:**
 - Consumes: `ElevationRequest`/`ElevationResponse`（Task 2）
@@ -332,7 +333,15 @@ git commit -m "feat: add elevated helper process with named-pipe IPC server"
   - `interface IElevationClient { Task<ElevationResponse> ExecuteAsync(ElevationRequest request, CancellationToken ct = default); }`
   - `class ElevationClient : IElevationClient`，构造函数接收`string pipeName`和`IHelperProcessLauncher launcher`
 
-- [ ] **Step 1: 写失败的测试，覆盖Review Focus里三条：已运行直接连接发送；未运行则调用Launch再连接；UAC取消（launcher抛异常）时返回失败而不抛出；空闲超时后管道已失效时能重新拉起**
+- [ ] **Step 1: 补项目引用，让 `PowerTools.Core.Tests` 能用到 Task 3 的 `ElevationServer`**
+
+```bash
+dotnet add tests/PowerTools.Core.Tests reference src/PowerTools.ElevatedHelper
+```
+
+- [ ] **Step 2: 写失败的测试，覆盖Review Focus里三条：已运行直接连接发送；未运行则调用Launch再连接；UAC取消（launcher抛异常）时返回失败而不抛出；空闲超时后管道已失效时能重新拉起**
+
+测试里需要一个简单的echo处理器验证双方能收发——Task 3 的 `ElevationServerTests` 里的`EchoHandler`是那个测试文件私有的类，不能跨项目直接引用，本任务在自己的测试文件里新定义一个同样逻辑的`EchoHandler`测试替身（几行代码，不算重复劳动，是两个独立测试项目各自的测试替身）；但`ElevationServer`本身是`PowerTools.ElevatedHelper`项目里的生产类，直接`using`该项目的命名空间复用即可，不要重新实现一遍服务端逻辑。
 
 ```csharp
 public class ElevationClientTests
@@ -393,29 +402,27 @@ public class ElevationClientTests
 }
 ```
 
-（具体三个正向测试需要配一个真实可连接的小型echo服务端辅助——可以直接复用Task 3的`ElevationServer`+一个`EchoHandler`测试替身，在测试里`await server.RunAsync(cts.Token)`跑在后台Task里，`ElevationClientTests`引用`PowerTools.ElevatedHelper`项目即可。）
-
-- [ ] **Step 2: 运行测试，确认失败**
+- [ ] **Step 3: 运行测试，确认失败**
 
 Run: `dotnet test tests/PowerTools.Core.Tests --filter ElevationClientTests`
 Expected: FAIL
 
-- [ ] **Step 3: 实现 `IHelperProcessLauncher`（真实版用`Process.Start(new ProcessStartInfo { UseShellExecute = true, Verb = "runas", FileName = ..., Arguments = pipeName })`）、`ElevationClient`**
+- [ ] **Step 4: 实现 `IHelperProcessLauncher`（真实版用`Process.Start(new ProcessStartInfo { UseShellExecute = true, Verb = "runas", FileName = ..., Arguments = pipeName })`）、`ElevationClient`**
 
 `ElevationClient.ExecuteAsync`逻辑：
 1. 若`launcher.IsHelperRunning(pipeName)`为false，调用`launcher.LaunchElevated(pipeName)`；若抛异常，直接返回`ElevationResponse(false, ex.Message, null)`。
 2. 尝试连接管道（设超时，比如5秒）。连接失败（比如管道其实已经不在、Review Focus里"空闲超时后又来新请求"的情况）：把这次当成"其实没在运行"，调用一次`launcher.LaunchElevated(pipeName)`重试连接一次；仍失败才真正返回失败。
 3. 连接成功后发送`ElevationRequest`、读取`ElevationResponse`并返回。
 
-- [ ] **Step 4: 运行测试，确认通过**
+- [ ] **Step 5: 运行测试，确认通过**
 
 Run: `dotnet test tests/PowerTools.Core.Tests --filter ElevationClientTests`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/PowerTools.Core/Elevation tests/PowerTools.Core.Tests/Elevation
+git add src/PowerTools.Core/Elevation tests/PowerTools.Core.Tests/Elevation tests/PowerTools.Core.Tests/PowerTools.Core.Tests.csproj
 git commit -m "feat: add elevation client with UAC-decline and stale-pipe retry handling"
 ```
 
