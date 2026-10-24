@@ -1,4 +1,5 @@
 .worktrees/
 bin/
 obj/
+AppPackages/
 .superpowers/
