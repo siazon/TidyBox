@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\PowerTools.Core\PowerTools.Core.csproj" />
+    <ProjectReference Include="..\..\src\PowerTools.ElevatedHelper\PowerTools.ElevatedHelper.csproj" />
   </ItemGroup>
 
 </Project>
