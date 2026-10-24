@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="PowerTools.Modules.DiskAnalyzer.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\PowerTools.Core\PowerTools.Core.csproj" />
   </ItemGroup>
 
