@@ -35,6 +35,26 @@ public class ModuleRegistryTests
     }
 
     [Fact]
+    public void Register_SameIdTwice_ReplacesEarlierModule()
+    {
+        var registry = new ModuleRegistry();
+        registry.Register(new FakeModule("disk", "old"));
+        registry.Register(new FakeModule("disk", "new"));
+
+        Assert.Single(registry.GetAll());
+        Assert.Equal("new", registry.GetById("disk")!.DisplayName);
+    }
+
+    [Fact]
+    public void GetById_IsCaseSensitive()
+    {
+        var registry = new ModuleRegistry();
+        registry.Register(new FakeModule("disk", "Disk"));
+
+        Assert.Null(registry.GetById("DISK"));
+    }
+
+    [Fact]
     public void GetById_UnknownId_ReturnsNull()
     {
         var registry = new ModuleRegistry();

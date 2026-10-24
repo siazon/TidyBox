@@ -18,6 +18,17 @@ public class ElevationMessageTests
     }
 
     [Fact]
+    public void ElevationResponse_SuccessCase_RoundTripsThroughJson()
+    {
+        var original = new ElevationResponse(true, null, "{\"removed\":3}");
+        var restored = JsonSerializer.Deserialize<ElevationResponse>(JsonSerializer.Serialize(original));
+
+        Assert.True(restored!.Success);
+        Assert.Null(restored.ErrorMessage);
+        Assert.Equal("{\"removed\":3}", restored.ResultJson);
+    }
+
+    [Fact]
     public void ElevationResponse_FailureCase_RoundTripsThroughJson()
     {
         var original = new ElevationResponse(false, "access denied", null);

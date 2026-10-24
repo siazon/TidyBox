@@ -16,8 +16,14 @@ public sealed partial class MainWindow : Window
         Nav.Loaded += async (_, _) => await LoadModulesAsync();
     }
 
+    private bool _modulesLoaded;
+
     private async Task LoadModulesAsync()
     {
+        // Loaded can fire again (e.g. when the element is re-parented); only populate the nav once.
+        if (_modulesLoaded) return;
+        _modulesLoaded = true;
+
         foreach (var module in _registry.GetAll())
         {
             try
@@ -27,12 +33,14 @@ public sealed partial class MainWindow : Window
             }
             catch (Exception ex)
             {
-                Nav.MenuItems.Add(new NavigationViewItem
+                var failed = new NavigationViewItem
                 {
                     Content = $"{module.DisplayName} (failed to load)",
                     Tag = ex.Message,
                     IsEnabled = false,
-                });
+                };
+                ToolTipService.SetToolTip(failed, ex.Message);
+                Nav.MenuItems.Add(failed);
             }
         }
     }

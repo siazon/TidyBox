@@ -4,6 +4,7 @@ public class ModuleRegistry
 {
     private readonly Dictionary<string, IToolModule> _modules = new();
 
+    /// <summary>Registers a module. A module with the same (case-sensitive) <see cref="IToolModule.ModuleId"/> replaces the earlier one.</summary>
     public void Register(IToolModule module)
     {
         _modules[module.ModuleId] = module;

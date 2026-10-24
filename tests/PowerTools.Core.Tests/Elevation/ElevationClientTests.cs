@@ -97,6 +97,26 @@ public class ElevationClientTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_ServerRepliesWithMalformedFrame_ReturnsFailureNotThrow()
+    {
+        var pipeName = "pt-client-" + Guid.NewGuid();
+        using var fakeServer = new System.IO.Pipes.NamedPipeServerStream(pipeName, System.IO.Pipes.PipeDirection.InOut, 1, System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous);
+        var serverTask = Task.Run(async () =>
+        {
+            await fakeServer.WaitForConnectionAsync();
+            await PipeMessageFraming.ReadAsync<ElevationRequest>(fakeServer);
+            await fakeServer.WriteAsync(BitConverter.GetBytes(-1)); // invalid length header
+            await fakeServer.FlushAsync();
+        });
+        var client = new ElevationClient(pipeName, new FakeLauncher { Running = true });
+
+        var response = await client.ExecuteAsync(new ElevationRequest("echo", "{}"));
+
+        Assert.False(response.Success);
+        await serverTask;
+    }
+
+    [Fact]
     public void NewSessionPipeName_IsUnpredictableAndPipeSafe()
     {
         var names = Enumerable.Range(0, 20).Select(_ => ElevationClient.NewSessionPipeName()).ToList();

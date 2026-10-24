@@ -82,7 +82,7 @@ public class ElevationClient : IElevationClient
                 return await PipeMessageFraming.ReadAsync<ElevationResponse>(pipe, ct)
                     ?? new ElevationResponse(false, "empty response from elevated helper", null);
             }
-            catch (IOException ex)
+            catch (Exception ex) when (ex is IOException or InvalidDataException or System.Text.Json.JsonException)
             {
                 return new ElevationResponse(false, ex.Message, null);
             }
