@@ -26,7 +26,7 @@ public sealed class DiskTreeRow : INotifyPropertyChanged
     /// <summary>0–100, this node's share of its parent folder's size.</summary>
     public double PercentOfParent { get; }
 
-    /// <summary>Size change since the previous scan; only top-level folders have one, otherwise empty.</summary>
+    /// <summary>Size change since the previous scan; only top-level folders that changed have one, otherwise empty.</summary>
     public string ChangeText { get; }
 
     public bool HasChildren => Node.Children.Count > 0;
@@ -55,4 +55,7 @@ public sealed class DiskTreeRow : INotifyPropertyChanged
     public string PercentText => PercentOfParent.ToString("0.0", CultureInfo.InvariantCulture) + " %";
 
     public string ModifiedText => Node.LastModifiedUtc.ToLocalTime().ToString("yyyy/M/d", CultureInfo.InvariantCulture);
+
+    // What screen readers announce for the list item.
+    public override string ToString() => $"{Name}, {SizeText}, {PercentText}";
 }

@@ -231,6 +231,12 @@ public class DiskTreeModelTests
     }
 
     [Fact]
+    public void ToString_IsReadableForScreenReaders()
+    {
+        Assert.Equal("Big, 600 B, 60.0 %", SampleModel().Rows[1].ToString());
+    }
+
+    [Fact]
     public void ChangeText_IsFilledForTopLevelFoldersOnly()
     {
         var changes = new[]
@@ -245,7 +251,7 @@ public class DiskTreeModelTests
         Assert.Equal("", model.Rows[0].ChangeText);                            // root
         Assert.Equal("+2.0 KB", model.Rows.Single(r => r.Name == "Big").ChangeText);
         Assert.Equal("-1.0 KB", model.Rows.Single(r => r.Name == "Mid").ChangeText);
-        Assert.Equal("0 B", model.Rows.Single(r => r.Name == "Small").ChangeText);
+        Assert.Equal("", model.Rows.Single(r => r.Name == "Small").ChangeText);                // unchanged: stay quiet
         Assert.Equal("", model.Rows.Single(r => r.Name == "Inner").ChangeText); // deeper rows have no history
         Assert.Equal("", model.Rows.Single(r => r.Name == "[3 个文件]").ChangeText);
     }

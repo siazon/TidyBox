@@ -112,7 +112,8 @@ public sealed class DiskTreeModel
     private string ChangeTextFor(DiskNode node, int depth)
     {
         if (depth != 1 || node.Kind != DiskNodeKind.Folder) return "";
-        return _changesByPath.TryGetValue(node.FullPath, out var delta) ? ByteSizeFormatter.FormatSigned(delta) : "";
+        // Unchanged folders stay blank so the few that did change stand out.
+        return _changesByPath.TryGetValue(node.FullPath, out var delta) && delta != 0 ? ByteSizeFormatter.FormatSigned(delta) : "";
     }
 
     private IEnumerable<DiskNode> Sorted(IReadOnlyList<DiskNode> nodes)
