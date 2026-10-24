@@ -412,7 +412,7 @@ Expected: FAIL
 `ElevationClient.ExecuteAsync`逻辑：
 1. 若`launcher.IsHelperRunning(pipeName)`为false，调用`launcher.LaunchElevated(pipeName)`；若抛异常，直接返回`ElevationResponse(false, ex.Message, null)`。
 2. 尝试连接管道（设超时，比如5秒）。连接失败（比如管道其实已经不在、Review Focus里"空闲超时后又来新请求"的情况）：把这次当成"其实没在运行"，调用一次`launcher.LaunchElevated(pipeName)`重试连接一次；仍失败才真正返回失败。
-3. 连接成功后发送`ElevationRequest`、读取`ElevationResponse`并返回。
+3. 连接成功后用`PipeMessageFraming.WriteAsync`/`ReadAsync`（Task 3 已加在`PowerTools.Core.Elevation`，4字节长度前缀）发送`ElevationRequest`、读取`ElevationResponse`并返回。**不要**直接对pipe用`JsonSerializer.SerializeAsync/DeserializeAsync`——Byte模式管道没有EOF，反序列化会永久挂起。
 
 - [ ] **Step 5: 运行测试，确认通过**
 
