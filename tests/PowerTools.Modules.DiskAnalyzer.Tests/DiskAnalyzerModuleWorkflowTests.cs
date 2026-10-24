@@ -65,6 +65,35 @@ public class DiskAnalyzerModuleWorkflowTests : IDisposable
     }
 
     [Fact]
+    public async Task ScanAsync_ReturnsTheDirectoryTreeAndTheSnapshotFromTheSameScan()
+    {
+        WriteData(@"A\a.txt", 100);
+        WriteData(@"A\sub\b.txt", 40);
+        var module = NewModule();
+        await module.InitializeAsync();
+
+        var result = await module.ScanAsync(Data);
+
+        Assert.Equal(140, result.Root.SizeBytes);
+        Assert.Equal(Data, result.Root.FullPath);
+        Assert.Equal(result.Root.SizeBytes, result.Current.Entries.Sum(e => e.SizeBytes));
+    }
+
+    [Fact]
+    public async Task CreateTreeModel_ShowsHistoryChangesOnTopLevelFolders()
+    {
+        WriteData(@"A\a.txt", 100);
+        var module = NewModule();
+        await module.InitializeAsync();
+        await module.ScanAsync(Data);
+        WriteData(@"A\more.txt", 2048);
+
+        var model = (await module.ScanAsync(Data)).CreateTreeModel();
+
+        Assert.Equal("+2.0 KB", model.Rows.Single(r => r.Name == "A").ChangeText);
+    }
+
+    [Fact]
     public async Task ScanAsync_SecondScan_ReportsGrowthAgainstThePreviousScan()
     {
         WriteData(@"A\a.txt", 100);

@@ -16,13 +16,17 @@ public class DirectoryScanner
     /// <summary>The flat view used for history: one entry per direct sub-folder of the root.</summary>
     public async Task<DiskScanSnapshot> ScanAsync(string rootPath, CancellationToken ct = default)
     {
-        var root = await ScanTreeAsync(rootPath, ct);
+        return ToSnapshot(await ScanTreeAsync(rootPath, ct));
+    }
 
+    /// <summary>Projects a scanned tree onto its direct sub-folders; files directly in the root are not entries.</summary>
+    public static DiskScanSnapshot ToSnapshot(DiskNode root)
+    {
         var entries = root.Children
             .Where(node => node.Kind == DiskNodeKind.Folder)
             .Select(node => new DiskScanEntry(node.FullPath, node.SizeBytes, node.LastModifiedUtc, node.FileCount))
             .ToList();
-        return new DiskScanSnapshot(rootPath, DateTime.UtcNow, entries);
+        return new DiskScanSnapshot(root.FullPath, DateTime.UtcNow, entries);
     }
 
     public async Task<DiskNode> ScanTreeAsync(string rootPath, CancellationToken ct = default)
