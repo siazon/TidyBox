@@ -189,7 +189,7 @@ docs/superpowers/specs/2026-10-25-context-menu-mechanism-spike.md   Task 1 的�
 
 **Interfaces:**
 - Consumes: `ContextMenuRegistryRoots`、`MenuEntry`（Task 2）。
-- Produces: `record ToggleResult(bool Success, string? Error)`；`sealed class MenuToggler(ContextMenuRegistryRoots roots)`：`ToggleResult SetEnabled(MenuEntry entry, bool enabled)`。
+- Produces: `record ToggleResult(bool Success, string? Error, bool NeedsExplorerRestart = false)`（Task 1 结论：处理程序的禁用/启用需要重启资源管理器才生效，动词立即生效，所以处理程序为 `true`、动词为 `false`；经典菜单开关为 `true`）；`sealed class MenuToggler(ContextMenuRegistryRoots roots)`：`ToggleResult SetEnabled(MenuEntry entry, bool enabled)`。
 
 规则（全部只写 `User` 根）：
 - **处理程序**：禁用 = 在 `User` 的 `Blocked` 键里写值（值名 = CLSID，规范成带花括号的大写形式；类型 `REG_SZ`，内容为空）；启用 = 删除该值（不区分大小写地找）。`Blocked` 键不存在时禁用要创建它，启用时不存在就当作已经启用。
@@ -200,6 +200,7 @@ docs/superpowers/specs/2026-10-25-context-menu-mechanism-spike.md   Task 1 的�
 - 同一个 CLSID 在多个位置出现时，禁用是按 CLSID 全局生效的（`Blocked` 的性质），启用同理；调用方（Task 7）负责刷新所有位置的条目。
 - **绝不删除**处理程序键、`CLSID` 键，或 `Machine` 根下的任何东西。
 - 注册表异常（`UnauthorizedAccessException`/`IOException`/`SecurityException`）→ `Success = false`，`Error` 为异常消息，不抛出。
+- 所有注册表写入用 .NET `RegistryKey` API，不调用 `reg.exe`（见 spike 结论里的空字符串陷阱）。
 
 - [ ] **Step 1: 写失败的测试：**
   - `SetEnabled_DisableHandler_AddsClsidToUserBlockedList`；`..._Enable_RemovesIt`；规范化（输入小写、无花括号的情形不会产生重复值）
