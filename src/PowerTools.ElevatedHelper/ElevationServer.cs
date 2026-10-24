@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Pipes;
 using System.Linq;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Threading;
 using System.Threading.Tasks;
 using PowerTools.Core.Elevation;
@@ -14,24 +16,38 @@ public class ElevationServer
     private readonly string _pipeName;
     private readonly IReadOnlyDictionary<string, IElevatedOperationHandler> _handlers;
     private readonly TimeSpan _idleTimeout;
+    private readonly PipeSecurity _pipeSecurity;
 
-    public ElevationServer(string pipeName, IEnumerable<IElevatedOperationHandler> handlers, TimeSpan idleTimeout)
+    /// <param name="allowedClient">
+    /// The only identity allowed to connect. It is passed in because the helper
+    /// may run as a different admin account than the app that launched it; defaults to this process's user.
+    /// </param>
+    public ElevationServer(string pipeName, IEnumerable<IElevatedOperationHandler> handlers, TimeSpan idleTimeout, SecurityIdentifier? allowedClient = null)
     {
         _pipeName = pipeName;
         _handlers = handlers.ToDictionary(h => h.OperationType);
         _idleTimeout = idleTimeout;
+
+        // Default pipe ACLs let other local users/processes talk to an elevated process; only the allowed client may read/write.
+        _pipeSecurity = new PipeSecurity();
+        var self = WindowsIdentity.GetCurrent().User!;
+        _pipeSecurity.AddAccessRule(new PipeAccessRule(self, PipeAccessRights.CreateNewInstance, AccessControlType.Allow));
+        _pipeSecurity.AddAccessRule(new PipeAccessRule(allowedClient ?? self, PipeAccessRights.ReadWrite, AccessControlType.Allow));
     }
 
     public async Task RunAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
-            using var pipeServer = new NamedPipeServerStream(
+            using var pipeServer = NamedPipeServerStreamAcl.Create(
                 _pipeName,
                 PipeDirection.InOut,
                 1,
                 PipeTransmissionMode.Byte,
-                PipeOptions.Asynchronous);
+                PipeOptions.Asynchronous,
+                0,
+                0,
+                _pipeSecurity);
 
             // Link the idle timeout directly into the token handed to
             // WaitForConnectionAsync so the pending accept is actually

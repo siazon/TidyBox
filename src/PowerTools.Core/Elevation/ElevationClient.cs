@@ -22,7 +22,17 @@ public class ElevationClient : IElevationClient
             return new ElevationResponse(false, launchError, null);
         }
 
-        var pipe = await TryConnectAsync(ct);
+        NamedPipeClientStream? pipe;
+        try
+        {
+            pipe = await TryConnectAsync(ct);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            // The pipe exists but its ACL does not allow us; relaunching would not help.
+            return new ElevationResponse(false, ex.Message, null);
+        }
+
         if (pipe is null)
         {
             // The helper may have exited after its idle timeout; treat it as not running and relaunch once.
@@ -31,7 +41,15 @@ public class ElevationClient : IElevationClient
                 return new ElevationResponse(false, relaunchError, null);
             }
 
-            pipe = await TryConnectAsync(ct);
+            try
+            {
+                pipe = await TryConnectAsync(ct);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return new ElevationResponse(false, ex.Message, null);
+            }
+
             if (pipe is null)
             {
                 return new ElevationResponse(false, "could not connect to elevated helper", null);

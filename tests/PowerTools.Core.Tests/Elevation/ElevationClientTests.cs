@@ -93,4 +93,20 @@ public class ElevationClientTests
         Assert.Equal(1, launcher.LaunchCount);
         cts.Cancel();
     }
+
+    [Fact]
+    public async Task ExecuteAsync_PipeDeniesAccess_ReturnsFailureResponseNotThrow()
+    {
+        var pipeName = "pt-client-" + Guid.NewGuid();
+        using var cts = new CancellationTokenSource();
+        var someoneElse = new System.Security.Principal.SecurityIdentifier("S-1-5-21-1111111111-2222222222-3333333333-9999");
+        _ = new ElevationServer(pipeName, new[] { new EchoHandler() }, TimeSpan.FromSeconds(5), someoneElse).RunAsync(cts.Token);
+        var launcher = new FakeLauncher { Running = true };
+        var client = new ElevationClient(pipeName, launcher);
+
+        var response = await client.ExecuteAsync(new ElevationRequest("echo", "{}"));
+
+        Assert.False(response.Success);
+        cts.Cancel();
+    }
 }
