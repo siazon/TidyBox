@@ -432,13 +432,20 @@ git commit -m "feat: add elevation client with UAC-decline and stale-pipe retry 
 - Consumes: `ModuleRegistry`/`IToolModule`（Task 1）
 - Produces: 无（外壳App是叶子节点，后续模块计划会往`ModuleRegistry`里注册真正的模块，不需要外壳App再对外产出接口）
 
-- [ ] **Step 1: 创建WinUI3项目骨架，加入解决方案，引用Core**
+- [ ] **Step 1: 手写WinUI3项目骨架（不要用 `dotnet new winui3`——预检查确认当前环境的 `dotnet new list` 不包含这个模板，WinUI3项目模板只在Visual Studio的"新建项目"向导里注册，CLI拿不到；手动创建 `.csproj` 和空的XAML文件即可，WinUI3项目本质就是一个带特定属性/包引用的SDK风格csproj，不依赖那个模板）**
+
+手动创建 `src/PowerTools.App/PowerTools.App.csproj`，关键属性：
+- `<TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>`
+- `<TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>`（对应约束"只支持Windows 11"，实际运行时门槛在后续Task 6的manifest里用`TargetDeviceFamily`进一步收紧到Win11）
+- `<OutputType>WinExe</OutputType>`，`<UseWinUI>true</UseWinUI>`
+- PackageReference: `Microsoft.WindowsAppSDK`（当前稳定版）、`Microsoft.Windows.SDK.BuildTools`
+- 项目引用 `PowerTools.Core`
 
 ```bash
-dotnet new winui3 -n PowerTools.App -o src/PowerTools.App
 dotnet sln PowerTools.sln add src/PowerTools.App/PowerTools.App.csproj
-dotnet add src/PowerTools.App reference src/PowerTools.Core
 ```
+
+之后创建最小的 `App.xaml`/`App.xaml.cs`（标准WinUI3应用入口样板）和 `MainWindow.xaml`/`MainWindow.xaml.cs`（下一步再填内容）。
 
 - [ ] **Step 2: 在 `MainWindow.xaml` 搭建一个 `NavigationView`，数据源绑定到一个空的`ModuleRegistry`实例（本任务不注册任何真实模块，留给后续模块计划）**
 
