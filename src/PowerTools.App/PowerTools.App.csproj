@@ -17,7 +17,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PowerTools.Core\PowerTools.Core.csproj" />
+    <ProjectReference Include="..\PowerTools.ElevatedHelper\PowerTools.ElevatedHelper.csproj" ReferenceOutputAssembly="false" OutputItemType="ElevatedHelperAssembly" />
   </ItemGroup>
+
+  <!-- ReferenceOutputAssembly=false keeps the helper's managed dll out of the package, but its apphost exe needs it next to it. -->
+  <Target Name="IncludeElevatedHelperAssemblyInPackage" BeforeTargets="AssignTargetPaths" DependsOnTargets="ResolveProjectReferences">
+    <ItemGroup>
+      <Content Include="@(ElevatedHelperAssembly)" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
