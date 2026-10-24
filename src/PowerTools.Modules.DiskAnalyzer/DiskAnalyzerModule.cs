@@ -59,11 +59,12 @@ public class DiskAnalyzerModule : IToolModule
     public async Task<DiskScanResult> ScanAsync(string rootPath, CancellationToken ct = default)
     {
         var previous = await _snapshotStore.LoadLatestAsync(rootPath);
-        var current = await _scanner.ScanAsync(rootPath, ct);
+        var root = await _scanner.ScanTreeAsync(rootPath, ct);
+        var current = DirectoryScanner.ToSnapshot(root);
         await _snapshotStore.SaveAsync(current);
 
         var changes = previous is null ? Array.Empty<DiskScanEntryDelta>() : SnapshotDiff.Compare(previous, current);
-        return new DiskScanResult(current, previous, changes);
+        return new DiskScanResult(current, previous, changes, root);
     }
 
     /// <summary>Installed Steam games across all library folders, largest first; empty when Steam is not available.</summary>
