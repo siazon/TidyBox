@@ -69,7 +69,14 @@ public class ElevationServer
             ElevationResponse response;
             if (_handlers.TryGetValue(request.OperationType, out var handler))
             {
-                response = await handler.HandleAsync(request.PayloadJson);
+                try
+                {
+                    response = await handler.HandleAsync(request.PayloadJson);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    response = new ElevationResponse(false, ex.Message, null);
+                }
             }
             else
             {
@@ -83,9 +90,9 @@ public class ElevationServer
         {
             // Server is shutting down; drop the in-flight connection.
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or System.Text.Json.JsonException)
         {
-            // Client disconnected unexpectedly; move on to the next connection.
+            // Client disconnected or sent a malformed frame; drop this connection and move on.
         }
         finally
         {
