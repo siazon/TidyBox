@@ -18,6 +18,7 @@ public sealed partial class UninstallerView : Page
     private IReadOnlyList<AppRow> _all = Array.Empty<AppRow>();
     private CancellationTokenSource? _measuring;
     private CancellationTokenSource? _loadingIcons;
+    private CancellationTokenSource? _watching;
 
     public UninstallerView()
     {
@@ -37,6 +38,7 @@ public sealed partial class UninstallerView : Page
     {
         _measuring?.Cancel();
         _loadingIcons?.Cancel();
+        _watching?.Cancel();
     }
 
     private async Task LoadAsync()
@@ -219,10 +221,12 @@ public sealed partial class UninstallerView : Page
         };
         if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
 
+        _watching?.Cancel();
         ResiduePanel.Visibility = Visibility.Collapsed;
         UninstallButton.IsEnabled = false;
         RefreshButton.IsEnabled = false;
         StatusText.Text = $"正在卸载“{app.DisplayName}”…";
+        Func<CancellationToken, Task<IReadOnlyList<ResidueItem>>>? deferred = null;
         try
         {
             var result = await _module.UninstallAsync(app);
@@ -235,6 +239,8 @@ public sealed partial class UninstallerView : Page
 
             if (outcome.Status != UninstallStatus.NotAvailable) await LoadAsync();
             if (result.Leftovers.Count > 0) ShowResidue(app, result.Leftovers);
+            deferred = result.DeferredScan;
+            if (deferred is not null) StatusText.Text = "卸载程序还在后台进行，完成后会自动检查残留（最多等 2 分钟）。";
         }
         catch (Exception ex)
         {
@@ -245,6 +251,40 @@ public sealed partial class UninstallerView : Page
             RefreshButton.IsEnabled = true;
             UninstallButton.IsEnabled = AppList.SelectedItem is AppRow;
         }
+
+        if (deferred is not null) await ScanLaterAsync(app, deferred);
+    }
+
+    // The uninstaller handed over to a background process: wait (bounded, and without blocking the buttons) until the
+    // program has really disappeared, then look for leftovers once.
+    private async Task ScanLaterAsync(InstalledApp app, Func<CancellationToken, Task<IReadOnlyList<ResidueItem>>> scan)
+    {
+        _watching?.Cancel();
+        var cts = _watching = new CancellationTokenSource();
+        try
+        {
+            var leftovers = await scan(cts.Token);
+            if (cts.IsCancellationRequested) return;
+
+            await LoadAsync();
+            if (leftovers.Count > 0)
+            {
+                ShowResidue(app, leftovers);
+                StatusText.Text = $"“{app.DisplayName}”卸载完成，发现 {leftovers.Count} 项可能的残留。";
+            }
+            else
+            {
+                StatusText.Text = $"“{app.DisplayName}”卸载完成，没有发现残留。";
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Left the page or started something else.
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"检查残留失败：{ex.Message}";
+        }
     }
 
     private void ShowResidue(InstalledApp app, IReadOnlyList<ResidueItem> leftovers)
@@ -253,10 +293,38 @@ public sealed partial class UninstallerView : Page
         ResidueList.ItemsSource = leftovers.Select(item => new ResidueRow(item)).ToList();
         ResidueResult.Visibility = Visibility.Collapsed;
         ResiduePanel.Visibility = Visibility.Visible;
+
+        // Some uninstallers keep deleting after they say "done": the list drops what disappears on its own (a minute at most).
+        _watching?.Cancel();
+        var cts = _watching = new CancellationTokenSource();
+        _ = _module.WatchLeftoversAsync(leftovers, remaining => DispatcherQueue.TryEnqueue(() => OnLeftoversShrunk(app, remaining)), cts.Token);
+    }
+
+    private void OnLeftoversShrunk(InstalledApp app, IReadOnlyList<ResidueItem> remaining)
+    {
+        if (ResidueList.ItemsSource is not IEnumerable<ResidueRow> shown) return;
+
+        var keep = remaining.Select(item => item.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var rows = shown.Where(row => keep.Contains(row.Item.Path)).ToList();
+        var dropped = shown.Count() - rows.Count;
+        if (dropped == 0) return;
+
+        ResidueList.ItemsSource = rows;
+        if (rows.Count == 0)
+        {
+            ResiduePanel.Visibility = Visibility.Collapsed;
+            StatusText.Text = $"“{app.DisplayName}”的卸载程序已自行清理完毕，没有残留。";
+            return;
+        }
+
+        ResidueTitle.Text = $"“{app.DisplayName}”卸载后可能还留下 {rows.Count} 项，请检查后再决定是否删除";
+        ResidueResult.Text = $"有 {dropped} 项已被卸载程序自己清理掉，列表已更新。";
+        ResidueResult.Visibility = Visibility.Visible;
     }
 
     private async void OnRemoveResidueClick(object sender, RoutedEventArgs e)
     {
+        _watching?.Cancel(); // no point polling while the user is removing things
         var rows = ((IEnumerable<ResidueRow>)ResidueList.ItemsSource).ToList();
         var chosen = rows.Where(r => r.CanSelect && r.IsChecked == true).ToList();
         if (chosen.Count == 0)
@@ -301,5 +369,9 @@ public sealed partial class UninstallerView : Page
         }
     }
 
-    private void OnDismissResidueClick(object sender, RoutedEventArgs e) => ResiduePanel.Visibility = Visibility.Collapsed;
+    private void OnDismissResidueClick(object sender, RoutedEventArgs e)
+    {
+        _watching?.Cancel();
+        ResiduePanel.Visibility = Visibility.Collapsed;
+    }
 }
