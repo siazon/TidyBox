@@ -1,6 +1,7 @@
 using PowerTools.Core.Elevation;
 using PowerTools.Core.Modules;
 using PowerTools.Modules.Uninstaller.Catalog;
+using PowerTools.Modules.Uninstaller.Icons;
 using PowerTools.Modules.Uninstaller.Model;
 using PowerTools.Modules.Uninstaller.Residue;
 using PowerTools.Modules.Uninstaller.Routing;
@@ -17,6 +18,7 @@ public sealed class UninstallerModule : IToolModule
     private readonly UninstallRouter _router;
     private readonly ResidueScanner _scanner;
     private readonly ResidueRemover _remover;
+    private readonly IAppIconProvider _icons;
 
     public UninstallerModule()
         : this(
@@ -40,12 +42,14 @@ public sealed class UninstallerModule : IToolModule
     {
     }
 
-    public UninstallerModule(IEnumerable<IAppCatalog> catalogs, UninstallRouter router, ResidueScanner scanner, ResidueRemover remover)
+    public UninstallerModule(IEnumerable<IAppCatalog> catalogs, UninstallRouter router, ResidueScanner scanner, ResidueRemover remover,
+        IAppIconProvider? icons = null)
     {
         _catalogs = catalogs.ToList();
         _router = router;
         _scanner = scanner;
         _remover = remover;
+        _icons = icons ?? new AppIconProvider(new ShellIconExtractor());
     }
 
     public string ModuleId => "uninstaller";
@@ -90,6 +94,9 @@ public sealed class UninstallerModule : IToolModule
     /// <summary>Real size of the program's folder, for entries whose registry record has no size; null when the folder is unknown.</summary>
     public Task<long?> MeasureSizeAsync(InstalledApp app, CancellationToken ct = default)
         => Task.Run(() => AppFolder.Resolve(app) is { } folder ? FolderSizer.Measure(folder, ct) : null, ct);
+
+    /// <summary>The app's icon as PNG bytes; null when none can be found, so the caller shows a placeholder.</summary>
+    public Task<byte[]?> GetIconPngAsync(InstalledApp app, CancellationToken ct = default) => _icons.GetPngAsync(app, ct);
 
     /// <summary>The installed program a dropped file, shortcut or folder belongs to.</summary>
     public InstalledApp? FindAppByPath(IEnumerable<InstalledApp> apps, string path)

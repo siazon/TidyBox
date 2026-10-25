@@ -144,6 +144,23 @@ public sealed class UninstallerModuleTests : IDisposable
         Assert.Empty(result.Leftovers);
     }
 
+    private sealed class FakeIcons : PowerTools.Modules.Uninstaller.Icons.IAppIconProvider
+    {
+        public Task<byte[]?> GetPngAsync(InstalledApp app, CancellationToken ct = default)
+            => Task.FromResult<byte[]?>(app.DisplayName == "HasIcon" ? new byte[] { 7 } : null);
+    }
+
+    [Fact]
+    public async Task GetIconPng_asks_the_icon_provider()
+    {
+        var roots = new ResidueRoots(new[] { _appData }, Array.Empty<string>(), Array.Empty<RegistryRoot>());
+        var module = new UninstallerModule(Array.Empty<IAppCatalog>(), new UninstallRouter(_runner, _store, _urls),
+            new ResidueScanner(roots), new ResidueRemover(_bin, new NoElevation(), roots), new FakeIcons());
+
+        Assert.Equal(new byte[] { 7 }, await module.GetIconPngAsync(App("HasIcon")));
+        Assert.Null(await module.GetIconPngAsync(App("Other")));
+    }
+
     [Fact]
     public async Task MeasureSize_sums_the_install_folder_and_is_null_without_one()
     {

@@ -5,7 +5,10 @@ using PowerTools.Modules.Uninstaller;
 using PowerTools.Modules.Uninstaller.Model;
 using PowerTools.Modules.Uninstaller.Residue;
 using PowerTools.Modules.Uninstaller.Routing;
+using System.Runtime.InteropServices.WindowsRuntime;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage.Streams;
 
 namespace PowerTools.App.Views;
 
@@ -14,6 +17,7 @@ public sealed partial class UninstallerView : Page
     private UninstallerModule _module = null!;
     private IReadOnlyList<AppRow> _all = Array.Empty<AppRow>();
     private CancellationTokenSource? _measuring;
+    private CancellationTokenSource? _loadingIcons;
 
     public UninstallerView()
     {
@@ -29,7 +33,11 @@ public sealed partial class UninstallerView : Page
         _ = LoadAsync();
     }
 
-    protected override void OnNavigatedFrom(NavigationEventArgs e) => _measuring?.Cancel();
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        _measuring?.Cancel();
+        _loadingIcons?.Cancel();
+    }
 
     private async Task LoadAsync()
     {
@@ -41,6 +49,7 @@ public sealed partial class UninstallerView : Page
             _all = await Task.Run(() => apps.Select(app => new AppRow(app)).ToList());
             ApplyFilter();
             _ = MeasureMissingSizesAsync();
+            _ = LoadIconsAsync();
         }
         catch (Exception ex)
         {
@@ -78,6 +87,41 @@ public sealed partial class UninstallerView : Page
         {
             // Leaving the page or refreshing: the rows that were not reached just stay without a size.
             foreach (var row in pending) row.Measuring = false;
+        }
+    }
+
+    // Icons come from the shell one by one in the background; a row keeps its placeholder until (or unless) its icon arrives.
+    private async Task LoadIconsAsync()
+    {
+        _loadingIcons?.Cancel();
+        var cts = _loadingIcons = new CancellationTokenSource();
+        using var gate = new SemaphoreSlim(4);
+        try
+        {
+            await Task.WhenAll(_all.Select(async row =>
+            {
+                await gate.WaitAsync(cts.Token);
+                try
+                {
+                    var png = await _module.GetIconPngAsync(row.App, cts.Token);
+                    if (png is null) return;
+
+                    using var stream = new InMemoryRandomAccessStream();
+                    await stream.WriteAsync(png.AsBuffer());
+                    stream.Seek(0);
+                    var image = new BitmapImage { DecodePixelWidth = 48 };
+                    await image.SetSourceAsync(stream);
+                    row.Icon = image;
+                }
+                finally
+                {
+                    gate.Release();
+                }
+            }));
+        }
+        catch (OperationCanceledException)
+        {
+            // Leaving the page or refreshing: rows not reached keep the placeholder.
         }
     }
 

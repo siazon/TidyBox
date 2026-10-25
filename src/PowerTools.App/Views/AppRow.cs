@@ -59,6 +59,19 @@ public sealed class AppRow : INotifyPropertyChanged
         set => Set(ref _measuring, value);
     }
 
+    private Microsoft.UI.Xaml.Media.ImageSource? _icon;
+
+    /// <summary>Arrives after the list is shown; until then (or when none was found) the placeholder is displayed.</summary>
+    public Microsoft.UI.Xaml.Media.ImageSource? Icon
+    {
+        get => _icon;
+        set => Set(ref _icon, value);
+    }
+
+    public Microsoft.UI.Xaml.Visibility IconVisibility => _icon is null ? Microsoft.UI.Xaml.Visibility.Collapsed : Microsoft.UI.Xaml.Visibility.Visible;
+
+    public Microsoft.UI.Xaml.Visibility PlaceholderVisibility => _icon is null ? Microsoft.UI.Xaml.Visibility.Visible : Microsoft.UI.Xaml.Visibility.Collapsed;
+
     public string SizeText => SizeBytes switch
     {
         null => Measuring ? "计算中…" : "",
