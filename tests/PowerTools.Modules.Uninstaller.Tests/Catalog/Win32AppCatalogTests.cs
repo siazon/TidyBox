@@ -1,3 +1,4 @@
+using PowerTools.Modules.Uninstaller.Catalog;
 using PowerTools.Modules.Uninstaller.Model;
 using PowerTools.Modules.Uninstaller.Tests.Support;
 
@@ -82,6 +83,24 @@ public class Win32AppCatalogTests : IDisposable
 
         Assert.Equal("\"C:\\a\\b.exe\",1", apps["WithIcon"].DisplayIcon);
         Assert.Null(apps["NoIcon"].DisplayIcon);
+    }
+
+    [Fact]
+    public void IsInstalled_follows_the_entry_in_the_registry_and_does_not_know_other_ids()
+    {
+        RegistrySandbox.AddEntry(_sandbox.Machine64, "Here", ("DisplayName", "Here"));
+        RegistrySandbox.AddEntry(_sandbox.User, "Mine", ("DisplayName", "Mine"));
+        var catalog = _sandbox.Catalog();
+        var apps = catalog.LoadAll().ToDictionary(a => a.DisplayName);
+
+        Assert.True(catalog.IsInstalled(apps["Here"]));
+        Assert.True(catalog.IsInstalled(apps["Mine"]));
+
+        _sandbox.Machine64.DeleteSubKeyTree(Win32AppCatalog.UninstallPath + @"\Here");
+
+        Assert.False(catalog.IsInstalled(apps["Here"]));
+        Assert.Null(catalog.IsInstalled(apps["Here"] with { Id = "somewhere else" }));
+        Assert.Null(catalog.IsInstalled(apps["Here"] with { Source = AppSource.Store, Id = "Pkg_1.0_x64__abc" }));
     }
 
     [Fact]

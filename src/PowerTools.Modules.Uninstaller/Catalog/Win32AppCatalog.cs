@@ -53,6 +53,28 @@ public sealed class Win32AppCatalog : IAppCatalog
         return apps.OrderBy(a => a.DisplayName, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    /// <summary>A single-key lookup, cheap enough to poll while an uninstaller is still working.</summary>
+    public bool? IsInstalled(InstalledApp app)
+    {
+        if (app.Source == AppSource.Store) return null;
+
+        var separator = app.Id.IndexOf('\\');
+        if (separator <= 0) return null;
+
+        var root = _roots.FirstOrDefault(r => r.Prefix == app.Id.Substring(0, separator));
+        if (root.Root is null) return null;
+
+        try
+        {
+            using var key = root.Root.OpenSubKey(UninstallPath + "\\" + app.Id.Substring(separator + 1));
+            return key is not null;
+        }
+        catch (Exception ex) when (IsRegistryFailure(ex))
+        {
+            return null;
+        }
+    }
+
     private static InstalledApp? TryRead(RegistryKey uninstall, string prefix, string name)
     {
         try

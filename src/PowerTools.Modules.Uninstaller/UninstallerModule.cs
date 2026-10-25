@@ -10,7 +10,8 @@ namespace PowerTools.Modules.Uninstaller;
 
 /// <param name="Outcome">How the uninstall itself went.</param>
 /// <param name="Leftovers">What is still on disk (or in the registry) afterwards; empty unless a desktop program uninstalled cleanly.</param>
-public record UninstallResult(UninstallOutcome Outcome, IReadOnlyList<ResidueItem> Leftovers);
+/// <param name="DeferredScan">Set when the uninstaller handed over to a background process, so the scan could not run yet; call it to wait (within limits) for the uninstall to really finish and scan then.</param>
+public record UninstallResult(UninstallOutcome Outcome, IReadOnlyList<ResidueItem> Leftovers, Func<CancellationToken, Task<IReadOnlyList<ResidueItem>>>? DeferredScan = null);
 
 public sealed class UninstallerModule : IToolModule
 {
@@ -19,6 +20,8 @@ public sealed class UninstallerModule : IToolModule
     private readonly ResidueScanner _scanner;
     private readonly ResidueRemover _remover;
     private readonly IAppIconProvider _icons;
+    private readonly Func<TimeSpan, CancellationToken, Task> _delay;
+    private readonly WatchOptions _watchOptions;
 
     public UninstallerModule()
         : this(
@@ -43,13 +46,15 @@ public sealed class UninstallerModule : IToolModule
     }
 
     public UninstallerModule(IEnumerable<IAppCatalog> catalogs, UninstallRouter router, ResidueScanner scanner, ResidueRemover remover,
-        IAppIconProvider? icons = null)
+        IAppIconProvider? icons = null, Func<TimeSpan, CancellationToken, Task>? delay = null, WatchOptions? watchOptions = null)
     {
         _catalogs = catalogs.ToList();
         _router = router;
         _scanner = scanner;
         _remover = remover;
         _icons = icons ?? new AppIconProvider(new ShellIconExtractor());
+        _delay = delay ?? Task.Delay;
+        _watchOptions = watchOptions ?? WatchOptions.Default;
     }
 
     public string ModuleId => "uninstaller";
@@ -88,8 +93,47 @@ public sealed class UninstallerModule : IToolModule
         var leftovers = before is not null && outcome.Status == UninstallStatus.Completed
             ? await Task.Run(() => _scanner.FindLeftovers(app, before), ct)
             : Array.Empty<ResidueItem>();
-        return new UninstallResult(outcome, leftovers);
+
+        // MSI and Squirrel-style launchers exit at once and finish in the background. If some catalog can tell when the
+        // program disappears from the installed list, the caller can wait for that and scan afterwards.
+        var deferred = before is not null && outcome.Status == UninstallStatus.MaybeStillRunning && IsInstalled(app) is not null
+            ? (Func<CancellationToken, Task<IReadOnlyList<ResidueItem>>>)(token => ScanWhenFinishedAsync(app, before, token))
+            : null;
+        return new UninstallResult(outcome, leftovers, deferred);
     }
+
+    private bool? IsInstalled(InstalledApp app)
+    {
+        var answers = _catalogs.Select(c => c.IsInstalled(app)).Where(a => a.HasValue).ToList();
+        return answers.Count == 0 ? null : answers.Any(a => a == true);
+    }
+
+    // Waits (bounded) until the program is gone from the installed list, gives the uninstaller a moment to finish its
+    // last deletions, then scans. If it never disappears, nothing is reported rather than a guess.
+    private async Task<IReadOnlyList<ResidueItem>> ScanWhenFinishedAsync(InstalledApp app, ResidueSnapshot before, CancellationToken ct)
+    {
+        var limits = _watchOptions with { MaxDuration = TimeSpan.FromMinutes(2) };
+        if (!await LeftoverWatcher.WaitUntilAsync(() => IsInstalled(app) != true, limits, _delay, ct)) return Array.Empty<ResidueItem>();
+
+        try
+        {
+            await _delay(TimeSpan.FromSeconds(3), ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return Array.Empty<ResidueItem>();
+        }
+
+        return await Task.Run(() => _scanner.FindLeftovers(app, before), ct);
+    }
+
+    /// <summary>
+    /// Keeps the list honest while the uninstaller finishes cleaning up on its own: calls <paramref name="onShrunk"/>
+    /// (from a background thread) with what is still there whenever items have disappeared. Bounded in time and cost,
+    /// see <see cref="LeftoverWatcher"/>.
+    /// </summary>
+    public Task WatchLeftoversAsync(IReadOnlyList<ResidueItem> items, Action<IReadOnlyList<ResidueItem>> onShrunk, CancellationToken ct = default)
+        => Task.Run(() => LeftoverWatcher.WatchAsync(items, item => !_remover.IsGone(item), onShrunk, _watchOptions, _delay, ct), ct);
 
     /// <summary>Real size of the program's folder, for entries whose registry record has no size; null when the folder is unknown.</summary>
     public Task<long?> MeasureSizeAsync(InstalledApp app, CancellationToken ct = default)

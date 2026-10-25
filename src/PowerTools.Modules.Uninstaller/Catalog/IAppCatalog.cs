@@ -6,4 +6,7 @@ namespace PowerTools.Modules.Uninstaller.Catalog;
 public interface IAppCatalog
 {
     IReadOnlyList<InstalledApp> LoadAll();
+
+    /// <summary>Whether the app is still registered as installed, or null when this catalog cannot tell.</summary>
+    bool? IsInstalled(InstalledApp app) => null;
 }

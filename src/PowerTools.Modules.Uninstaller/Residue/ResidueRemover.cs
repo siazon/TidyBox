@@ -88,7 +88,8 @@ public sealed class ResidueRemover
         return _roots.IsRemovableRegistryKey(item.Path) ? null : "这是受保护的注册表位置，不会被删除。";
     }
 
-    private bool IsGone(ResidueItem item)
+    /// <summary>True when the item no longer exists, so there is nothing left to remove.</summary>
+    public bool IsGone(ResidueItem item)
         => item.Kind == ResidueKind.Folder ? !Directory.Exists(item.Path) : !_roots.RegistryKeyExists(item.Path);
 
     private RemovalResult MoveToRecycleBin(ResidueItem item)

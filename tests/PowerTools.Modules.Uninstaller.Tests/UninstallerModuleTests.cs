@@ -11,7 +11,11 @@ public sealed class UninstallerModuleTests : IDisposable
 {
     private sealed class FakeCatalog(params InstalledApp[] apps) : IAppCatalog
     {
+        public Func<bool?> Installed = () => null;
+
         public IReadOnlyList<InstalledApp> LoadAll() => apps;
+
+        public bool? IsInstalled(InstalledApp app) => Installed();
     }
 
     private sealed class BrokenCatalog : IAppCatalog
@@ -38,6 +42,7 @@ public sealed class UninstallerModuleTests : IDisposable
     private readonly FakeUrls _urls = new();
     private readonly FakeStore _store = new();
     private readonly NoRecycleBin _bin = new();
+    private Action? _onDelay;
 
     public UninstallerModuleTests() => _appData = Directory.CreateDirectory(Path.Combine(_base, "AppData")).FullName;
 
@@ -50,7 +55,8 @@ public sealed class UninstallerModuleTests : IDisposable
             catalogs,
             new UninstallRouter(_runner, _store, _urls),
             new ResidueScanner(roots),
-            new ResidueRemover(_bin, new NoElevation(), roots));
+            new ResidueRemover(_bin, new NoElevation(), roots),
+            delay: (_, ct) => { ct.ThrowIfCancellationRequested(); _onDelay?.Invoke(); return Task.CompletedTask; });
     }
 
     private static InstalledApp App(string name, AppSource source = AppSource.Win32, string? uninstall = null, string? installLocation = null,
@@ -187,6 +193,65 @@ public sealed class UninstallerModuleTests : IDisposable
         Assert.Equal("Dropped", Module().FindAppByPath(apps, link)?.DisplayName);
         Assert.Equal("Dropped", Module().FindAppByPath(apps, exe)?.DisplayName);
         Assert.Null(Module().FindAppByPath(apps, Path.Combine(_appData, "nothing.exe")));
+    }
+
+    [Fact]
+    public async Task A_launcher_that_hands_over_gets_a_deferred_scan_that_waits_for_the_program_to_disappear_from_the_list()
+    {
+        var install = Directory.CreateDirectory(Path.Combine(_appData, "Odd Tool")).FullName;
+        var checks = 0;
+        var catalog = new FakeCatalog { Installed = () => ++checks < 4 };
+        var app = App("Whatever", uninstall: "MsiExec.exe /X{AAAAAAAA-0000-0000-0000-000000000000}", installLocation: install);
+
+        var result = await Module(catalog).UninstallAsync(app);
+        Assert.Equal(UninstallStatus.MaybeStillRunning, result.Outcome.Status);
+        Assert.Empty(result.Leftovers);
+        Assert.NotNull(result.DeferredScan);
+
+        var later = await result.DeferredScan!(CancellationToken.None);
+
+        Assert.Equal(install, Assert.Single(later).Path);
+        Assert.Equal(4, checks); // one probe to see whether the program can be followed at all, then the checks while waiting
+    }
+
+    [Fact]
+    public async Task The_deferred_scan_gives_up_with_nothing_when_the_program_never_disappears()
+    {
+        var install = Directory.CreateDirectory(Path.Combine(_appData, "Odd Tool")).FullName;
+        var catalog = new FakeCatalog { Installed = () => true };
+        var app = App("Whatever", uninstall: "MsiExec.exe /X{AAAAAAAA-0000-0000-0000-000000000000}", installLocation: install);
+
+        var result = await Module(catalog).UninstallAsync(app);
+
+        Assert.Empty(await result.DeferredScan!(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task No_deferred_scan_when_the_uninstall_finished_failed_or_cannot_be_followed()
+    {
+        var app = App("Whatever", uninstall: "\"C:\\a\\unins.exe\"");
+        Assert.Null((await Module().UninstallAsync(app)).DeferredScan);
+
+        _runner.Result = () => 1;
+        Assert.Null((await Module().UninstallAsync(app)).DeferredScan);
+
+        // No catalog can say whether the program is still installed, so there is nothing to wait for.
+        var msi = App("Whatever", uninstall: "MsiExec.exe /X{AAAAAAAA-0000-0000-0000-000000000000}");
+        _runner.Result = () => 0;
+        Assert.Null((await Module(new FakeCatalog()).UninstallAsync(msi)).DeferredScan);
+    }
+
+    [Fact]
+    public async Task WatchLeftovers_reports_items_that_disappear_while_watching()
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(_appData, "Fading")).FullName;
+        var item = new ResidueItem(ResidueKind.Folder, folder, ResidueConfidence.Medium, "x", false, true);
+        var reported = new List<int>();
+        _onDelay = () => { if (Directory.Exists(folder)) Directory.Delete(folder); };
+
+        await Module().WatchLeftoversAsync(new[] { item }, remaining => reported.Add(remaining.Count), CancellationToken.None);
+
+        Assert.Equal(new[] { 0 }, reported);
     }
 
     [Fact]
