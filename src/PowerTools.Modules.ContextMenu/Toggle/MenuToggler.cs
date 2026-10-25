@@ -26,6 +26,11 @@ public sealed class MenuToggler
 
     public ToggleResult SetEnabled(MenuEntry entry, bool enabled)
     {
+        if (entry.LockedReason is not null)
+        {
+            return Fail(entry.LockedReason);
+        }
+
         if (entry.State == MenuEntryState.DisabledBySystem)
         {
             return Fail("该项目在系统级已被禁用，无法在这里更改。");

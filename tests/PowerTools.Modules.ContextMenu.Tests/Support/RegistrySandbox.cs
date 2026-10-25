@@ -37,6 +37,18 @@ public sealed class RegistrySandbox : IDisposable
         if (defaultValue is not null) key.SetValue("", defaultValue);
     }
 
+    /// <summary>A handler registered under shellex\&lt;handlerType&gt; (PropertySheetHandlers, DragDropHandlers, CopyHookHandlers...).</summary>
+    public void AddShellexHandler(Hive hive, MenuLocation location, string handlerType, string keyName, string? defaultValue)
+    {
+        using var key = Hive(hive).CreateSubKey($@"{ContextMenuRegistryRoots.ClassesPath}\{location.RegistryKeyName()}\shellex\{handlerType}\{keyName}");
+        if (defaultValue is not null) key.SetValue("", defaultValue);
+    }
+
+    public void AddClsidSubKey(Hive hive, string clsid, string subKey)
+    {
+        using var key = Hive(hive).CreateSubKey($@"{ContextMenuRegistryRoots.ClassesPath}\CLSID\{clsid}\{subKey}");
+    }
+
     public void AddVerb(Hive hive, MenuLocation location, string verbName, params (string Name, object Value)[] values)
     {
         using var key = Hive(hive).CreateSubKey($@"{ContextMenuRegistryRoots.ClassesPath}\{location.RegistryKeyName()}\shell\{verbName}");

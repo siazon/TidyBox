@@ -21,7 +21,9 @@ public enum MenuEntryState
 }
 
 /// <param name="Id">Always <c>"{Location}|{Kind}|{KeyName}"</c>; <paramref name="KeyName"/> is kept verbatim (it may have leading spaces).</param>
-/// <param name="Problem">Non-null when the entry is unrecognised or stale; the view shows it read-only with this explanation.</param>
+/// <param name="Problem">Non-null when the registration looks unrecognised or stale (informational; the entry may still be changeable).</param>
+/// <param name="Warning">Non-null when changing the entry has a side effect or it behaves unusually; shown next to the entry.</param>
+/// <param name="LockedReason">Non-null when the entry must not be changed here; the view shows it read-only with this explanation.</param>
 public record MenuEntry(
     string Id,
     MenuLocation Location,
@@ -34,4 +36,6 @@ public record MenuEntry(
     bool InMachineHive,
     bool InUserHive,
     MenuEntryState State,
-    string? Problem);
+    string? Problem,
+    string? Warning = null,
+    string? LockedReason = null);

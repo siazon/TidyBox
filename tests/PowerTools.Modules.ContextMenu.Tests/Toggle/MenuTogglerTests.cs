@@ -230,6 +230,21 @@ public class MenuTogglerTests : IDisposable
     }
 
     [Fact]
+    public void SetEnabled_CoreExplorerVerb_IsRefusedWithItsLockedReason_AndNothingIsWritten()
+    {
+        _sandbox.AddVerb(Hive.Machine, MenuLocation.Folder, "open", ("", "Open"));
+        var entry = Reload("Folder|Verb|open");
+        Assert.NotNull(entry.LockedReason);
+        var before = Snapshot(_sandbox.Roots.User);
+
+        var result = Toggler().SetEnabled(entry, enabled: false);
+
+        Assert.False(result.Success);
+        Assert.Equal(entry.LockedReason, result.Error);
+        Assert.Equal(before, Snapshot(_sandbox.Roots.User));
+    }
+
+    [Fact]
     public void SetEnabled_HandlerWithoutAClsid_Fails()
     {
         _sandbox.AddHandler(Hive.Machine, MenuLocation.AllFiles, "Mystery", "not a clsid");
