@@ -231,13 +231,15 @@ public sealed partial class UninstallerView : Page
         {
             var result = await _module.UninstallAsync(app);
             var outcome = result.Outcome;
+
+            // Reloading rewrites the status line, so the outcome is written after it or a failure would vanish at once.
+            if (outcome.Status != UninstallStatus.NotAvailable) await LoadAsync();
             StatusText.Text = outcome.Status switch
             {
                 UninstallStatus.Completed => outcome.Message ?? $"已卸载“{app.DisplayName}”。",
                 _ => outcome.Message ?? "卸载没有完成。",
             };
 
-            if (outcome.Status != UninstallStatus.NotAvailable) await LoadAsync();
             if (result.Leftovers.Count > 0) ShowResidue(app, result.Leftovers);
             deferred = result.DeferredScan;
             if (deferred is not null) StatusText.Text = "卸载程序还在后台进行，完成后会自动检查残留（最多等 2 分钟）。";
