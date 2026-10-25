@@ -30,6 +30,24 @@ public sealed class ResidueRoots
 
     public IReadOnlyList<RegistryRoot> RegistryRoots { get; }
 
+    /// <summary>True for anything that must never be offered or removed: a drive root, one of our roots, the Windows folder, or a protected name.</summary>
+    public bool IsProtectedFolder(string path)
+    {
+        if (Path.GetPathRoot(path) is { } driveRoot && SamePath(path, driveRoot)) return true;
+        if (ProtectedNames.Contains(ResidueScanner.Normalize(Path.GetFileName(FullPath(path))))) return true;
+
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        if (windows.Length > 0 && (SamePath(path, windows) || IsUnder(FullPath(path), FullPath(windows)))) return true;
+
+        return FolderRoots.Concat(ElevatedFolderRoots).Any(r => SamePath(path, r));
+    }
+
+    internal static string FullPath(string path) => Path.GetFullPath(path).TrimEnd('\\');
+
+    internal static bool IsUnder(string path, string root) => path.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase);
+
+    private static bool SamePath(string a, string b) => string.Equals(FullPath(a), FullPath(b), StringComparison.OrdinalIgnoreCase);
+
     public static ResidueRoots Real()
     {
         static string Folder(Environment.SpecialFolder folder) => Environment.GetFolderPath(folder);

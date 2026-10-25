@@ -73,14 +73,14 @@ public sealed class ResidueScanner
         string path;
         try
         {
-            path = FullPath(app.InstallLocation);
+            path = ResidueRoots.FullPath(app.InstallLocation);
         }
         catch (ArgumentException)
         {
             return null;
         }
 
-        if (!Directory.Exists(path) || IsProtectedFolder(path)) return null;
+        if (!Directory.Exists(path) || _roots.IsProtectedFolder(path)) return null;
 
         return FolderItem(path, ResidueConfidence.High, "安装目录");
     }
@@ -94,13 +94,13 @@ public sealed class ResidueScanner
                 var name = Normalize(System.IO.Path.GetFileName(child));
                 if (name == appName)
                 {
-                    if (!IsProtectedFolder(child)) yield return FolderItem(child, ResidueConfidence.Medium, "名称与应用相同");
+                    if (!_roots.IsProtectedFolder(child)) yield return FolderItem(child, ResidueConfidence.Medium, "名称与应用相同");
                 }
                 else if (publisher is not null && name == publisher)
                 {
                     foreach (var grandchild in SafeDirectories(child))
                     {
-                        if (Normalize(System.IO.Path.GetFileName(grandchild)) == appName && !IsProtectedFolder(grandchild))
+                        if (Normalize(System.IO.Path.GetFileName(grandchild)) == appName && !_roots.IsProtectedFolder(grandchild))
                         {
                             yield return FolderItem(grandchild, ResidueConfidence.Medium, "位于发布者目录下，名称与应用相同");
                         }
@@ -134,22 +134,11 @@ public sealed class ResidueScanner
 
     private ResidueItem FolderItem(string path, ResidueConfidence confidence, string reason)
         => new(ResidueKind.Folder, path, confidence, reason,
-            NeedsElevation: _roots.ElevatedFolderRoots.Any(r => IsUnder(path, FullPath(r))),
+            NeedsElevation: _roots.ElevatedFolderRoots.Any(r => ResidueRoots.IsUnder(path, ResidueRoots.FullPath(r))),
             Removable: true);
 
     private static ResidueItem RegistryItem(RegistryRoot root, string relativePath, string reason)
         => new(ResidueKind.RegistryKey, $@"{root.Hive}\{relativePath}", ResidueConfidence.Medium, reason, root.NeedsElevation, Removable: false);
-
-    private bool IsProtectedFolder(string path)
-    {
-        if (System.IO.Path.GetPathRoot(path) is { } driveRoot && SamePath(path, driveRoot)) return true;
-        if (ResidueRoots.ProtectedNames.Contains(Normalize(System.IO.Path.GetFileName(path)))) return true;
-
-        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-        if (windows.Length > 0 && IsUnderOrSame(path, FullPath(windows))) return true;
-
-        return _roots.FolderRoots.Concat(_roots.ElevatedFolderRoots).Any(r => SamePath(path, FullPath(r)));
-    }
 
     private static IEnumerable<string> SafeDirectories(string folder)
     {
@@ -195,12 +184,4 @@ public sealed class ResidueScanner
         text = Architecture.Replace(text, " ");
         return new string(text.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
     }
-
-    private static string FullPath(string path) => System.IO.Path.GetFullPath(path).TrimEnd('\\');
-
-    private static bool SamePath(string a, string b) => string.Equals(FullPath(a), FullPath(b), StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsUnder(string path, string root) => path.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsUnderOrSame(string path, string root) => SamePath(path, root) || IsUnder(path, root);
 }
