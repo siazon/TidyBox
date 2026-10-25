@@ -4,7 +4,7 @@
 
 **Goal:** 实现卸载工具作为一个 `IToolModule`：一个统一的"已安装项目"列表（Win32 / Microsoft Store / Steam），按来源路由到三种卸载机制；Win32 卸载后做残留扫描，结果分组展示，用户勾选后**可恢复地**删除。
 
-**Architecture:** 新增 `PowerTools.Modules.Uninstaller` 类库（纯逻辑，依赖 `PowerTools.Core`，**不引用**磁盘分析模块）。三个来源各有一个"目录"（读取已安装项目）；`UninstallRouter` 按来源分发；`ResidueScanner` 在卸载前后各扫一次已知根目录/注册表根，得出"仍然存在且与该应用相关"的残留；`ResidueRemover` 把文件送进回收站、把注册表键先导出备份再删除。需要管理员权限的位置（`Program Files`、`HKLM`）通过已有的 `IElevationClient` 交给提权帮手，帮手端用**白名单**自行再校验路径。注册表/文件系统根都可注入，测试在沙箱里跑。
+**Architecture:** 新增 `PowerTools.Modules.Uninstaller` 类库（纯逻辑，依赖 `PowerTools.Core`，**不引用**磁盘分析模块）。三个来源各有一个"目录"（读取已安装项目）；`UninstallRouter` 按来源分发；`ResidueScanner` 在卸载前后各扫一次已知根目录/注册表根，得出"仍然存在且与该应用相关"的残留；`ResidueRemover` 把文件夹送进回收站；注册表残留只展示不删除（包身份下删不掉，见 spike）。需要管理员权限的文件夹（`Program Files`、`ProgramData`）通过已有的 `IElevationClient` 交给提权帮手，帮手端用**白名单**自行再校验路径。注册表/文件系统根都可注入，测试在沙箱里跑。
 
 **Tech Stack:** .NET 8（`net8.0-windows10.0.19041.0`，为了 `Windows.Management.Deployment.PackageManager`）, xUnit, `Microsoft.Win32.Registry`, `Microsoft.VisualBasic.FileIO`（回收站）, WinUI3。
 
@@ -13,13 +13,13 @@
 ## Global Constraints
 
 - .NET 8，只支持 Windows 11，App 以普通用户权限运行；只有 `Program Files` / `HKLM` 的残留清理才经 `ElevationClient` 临时提权（操作类型 `uninstall.removeResidual`，见 `ElevationRequest` 注释）。
-- 删除必须可恢复：文件**只进回收站**，注册表键**先导出成 `.reg` 备份再删除**。直接删除属于设计文档的反目标。
+- 删除必须可恢复：文件夹**只进回收站**（需要管理员的移到隔离目录）。直接删除属于设计文档的反目标。
+- **注册表残留只展示、不提供删除**（Task 1 实测：包身份下 `HKCU` 和 `HKLM` 的删除都被虚拟化，真实键删不掉，见 `2026-10-25-uninstaller-mechanism-spike.md`）。因此本模块不写 `.reg` 备份、不删注册表。
 - 残留结果必须分组/过滤，**不能**把原始 diff 甩给用户（设计文档第 5 条，吸取 Revo 反馈）。
 - 不把 GPL 项目的代码编译进来；Bulk Crap Uninstaller（Apache 2.0）可借鉴思路。
 - 模块之间不互相引用内部实现：本模块**不**引用 `PowerTools.Modules.DiskAnalyzer`。
 - 免费范围：列表、三条卸载路由、卸载后残留扫描与审核删除。**不在本计划内**：强制残留清理（程序已卸载/卸载失败时仍强删）、批量卸载（付费功能，等付费解锁机制定了再做）、非 Steam 大型应用识别、卸载**前**的安装监控。
 - 用户可见文案用简体中文。
-- 所有注册表写入用 .NET 的 `RegistryKey` API，**不**调用 `reg.exe`（见右键菜单 spike 的踩坑记录）。导出 `.reg` 备份由我们自己写文件格式，不依赖 `reg export`。
 - 应用以 MSIX 包身份运行：`HKCU\Software` 下的写入/删除默认被虚拟化，`unvirtualizedResources` 目前只排除了 `Software\Classes` 和 `Shell Extensions`。**不要为了本模块把排除范围扩大到整个 `HKCU\Software`**，是否可行由 Task 1 决定。
 
 ## 已知的真实情况（决定了边界用例，实现前仍以 Task 1 的实测为准）
@@ -36,8 +36,9 @@
 - 残留候选恰好是根目录本身（`C:\Program Files`、`%AppData%`）、系统目录或包含其他已安装应用的目录：永远不进入候选列表，也不能被勾选删除（Task 4、Task 6）。
 - 卸载程序启动失败、被用户取消（退出码非 0）或程序本来就不存在：不能继续做残留扫描并暗示"已卸载"；列表在失败后仍要能刷新（Task 3、Task 7）。
 - 卸载程序自己启动一个子进程后立刻退出（MSI、`Update.exe`、自解压器）：等待逻辑要给出明确的"可能尚未完成"，不能把"进程退出了"当成"卸载完成"（Task 3）。
-- 删除过程中某个路径被占用/拒绝访问/已不存在：只让这一项失败并给出原因，其余项继续，备份文件仍保留（Task 5、Task 6）。
+- 删除过程中某个路径被占用/拒绝访问/已不存在：只让这一项失败并给出原因，其余项继续（Task 5、Task 6）。
 - 提权帮手收到的路径不在白名单内（被篡改的请求）：必须拒绝，不能因为请求来自我们自己的管道就照做（Task 6）。
+- 注册表残留在界面里不可勾选、不可删除，不能被"全选/删除选中项"带上（Task 5、Task 7）。
 
 ---
 
@@ -55,7 +56,7 @@ src/PowerTools.Modules.Uninstaller/
   Residue/ResidueItem.cs           ResidueItem / ResidueKind / ResidueConfidence
   Residue/ResidueRoots.cs          可注入的文件夹根 + 注册表根；固定的受保护路径
   Residue/ResidueScanner.cs        卸载前快照 + 卸载后匹配
-  Residue/ResidueRemover.cs        回收站 + .reg 备份 + 删除；需要提权的走 IElevationClient
+  Residue/ResidueRemover.cs        文件夹进回收站；需要提权的走 IElevationClient；注册表项拒绝
   Residue/IRecycleBin.cs           接口 + 真实实现
   UninstallerModule.cs             IToolModule + 对界面暴露的工作流
 src/PowerTools.ElevatedHelper/RemoveResidualHandler.cs   uninstall.removeResidual 的帮手端实现（白名单校验）
@@ -168,7 +169,7 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
 **Interfaces:**
 - Consumes: `InstalledApp`（Task 2）
 - Produces: `enum ResidueKind { Folder, RegistryKey }`、`enum ResidueConfidence { High, Medium }`（High = 就是 `InstallLocation` 本身或其内部；Medium = 名称匹配）。
-- Produces: `record ResidueItem(ResidueKind Kind, string Path, ResidueConfidence Confidence, string Reason, bool NeedsElevation)`；`Path` 对注册表是 `HKCU\Software\X` / `HKLM\SOFTWARE\X` 形式。
+- Produces: `record ResidueItem(ResidueKind Kind, string Path, ResidueConfidence Confidence, string Reason, bool NeedsElevation, bool Removable)`；`Path` 对注册表是 `HKCU\Software\X` / `HKLM\SOFTWARE\X` 形式；**注册表项恒为 `Removable == false`**（Task 1），文件夹为 `true`。
 - Produces: `class ResidueRoots { IReadOnlyList<string> FolderRoots; IReadOnlyList<(string Hive, RegistryKey Key, string Path)> RegistryRoots; IReadOnlySet<string> ProtectedFolders; static ResidueRoots Real(); }` —— `Real()` 的文件夹根：`ProgramFiles`、`ProgramFiles(x86)`、`ProgramData`、`LocalAppData`、`AppData`（**不**含 `LocalAppData\Packages`、`Windows`、`System32`）；注册表根：`HKCU\Software`、`HKLM\SOFTWARE`、`HKLM\SOFTWARE\WOW6432Node`（只看根下一层子键）。`ProtectedFolders` 包含所有根本身和 `Microsoft`、`Windows`、`Common Files`、`Packages` 等。
 - Produces: `class ResidueScanner { ResidueScanner(ResidueRoots roots); ResidueSnapshot Capture(InstalledApp app); IReadOnlyList<ResidueItem> FindLeftovers(InstalledApp app, ResidueSnapshot before); }`；`ResidueSnapshot` 是不透明的、只含"卸载前就存在的匹配候选路径集合"的类型。
 
@@ -180,7 +181,7 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
   - `Short_or_generic_names_never_match`：应用名 `Git`（≤3 个字符）或名称分词全是通用词（`Microsoft`、`Windows`、`Update`、`Setup`、`Tools`）时，名称匹配不产生任何候选（只有 `InstallLocation` 仍可）。
   - `Roots_and_protected_folders_are_never_candidates`：`InstallLocation` 恰好等于 `C:\Program Files` 或某个根 → 不返回；
   - `Folder_shared_with_another_installed_app_is_not_residue`：发布者目录（如 `…\Contoso`）下还有别的子目录属于另一个仍装着的应用时，只考虑本应用自己的子目录，不报整个发布者目录。
-  - `Registry_residue_under_hklm_needs_elevation_and_hkcu_does_not`
+  - `Registry_residue_is_reported_but_never_removable`；`Folder_residue_under_program_files_needs_elevation_and_under_appdata_does_not`
 
 - [ ] **Step 2: 运行测试确认失败。** Run: `dotnet test tests/PowerTools.Modules.Uninstaller.Tests --filter FullyQualifiedName~ResidueScanner`　Expected: FAIL，类型不存在。
 
@@ -192,39 +193,39 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
 
 ---
 
-## Task 5: 可恢复的残留删除（用户权限部分）
+## Task 5: 可恢复的文件夹残留删除（用户权限部分）
+
+注册表残留不在此处理（Task 1：被虚拟化，删不掉）。
 
 **Files:**
 - Create: `Residue/IRecycleBin.cs`, `Residue/ResidueRemover.cs`
 - Test: `tests/PowerTools.Modules.Uninstaller.Tests/Residue/ResidueRemoverTests.cs`
 
 **Interfaces:**
-- Consumes: `ResidueItem`, `ResidueKind`（Task 4）, `PowerTools.Core.Elevation.IElevationClient`
+- Consumes: `ResidueItem`, `ResidueKind`, `ResidueRoots`（Task 4）, `PowerTools.Core.Elevation.IElevationClient`
 - Produces: `interface IRecycleBin { void Delete(string path); }`（真实实现用 `Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin)`）。
-- Produces: `record RemovalResult(ResidueItem Item, bool Success, string? Error)`；`class ResidueRemover { ResidueRemover(IRecycleBin recycleBin, IElevationClient elevation, string backupDirectory, ResidueRoots roots); Task<IReadOnlyList<RemovalResult>> RemoveAsync(IReadOnlyList<ResidueItem> items, CancellationToken ct = default); }`
-- 备份：每次调用在 `backupDirectory\<时间戳>.reg` 写一个 Windows Registry Editor 5.00 格式的备份（`HKCU`/`HKLM` 前缀完整），**先写备份、写成功再删**；备份写失败 → 该项失败且不删除。
+- Produces: `record RemovalResult(ResidueItem Item, bool Success, string? Error)`；`class ResidueRemover { ResidueRemover(IRecycleBin recycleBin, IElevationClient elevation, ResidueRoots roots); Task<IReadOnlyList<RemovalResult>> RemoveAsync(IReadOnlyList<ResidueItem> items, CancellationToken ct = default); }`
 
-- [ ] **Step 1: 写失败的测试** `ResidueRemoverTests`（假的 `IRecycleBin`、假的 `IElevationClient`、沙箱注册表）：
-  - `Folders_go_to_the_recycle_bin_not_deleted_directly`（假回收站记录了路径；磁盘上目录由假实现保留）
-  - `Registry_key_is_exported_to_a_reg_file_before_it_is_deleted`：备份文件包含键名、值（字符串/DWORD/二进制/多字符串都覆盖）和子键，删除后键不存在；用导入逻辑（测试里解析自己写的 `.reg`）验证可还原。
-  - `Backup_failure_prevents_deletion`（备份目录指向一个文件，写不了）
-  - `One_failing_item_does_not_stop_the_others`（占用/不存在/拒绝访问各一）
-  - `Items_needing_elevation_are_sent_to_the_helper_and_not_touched_locally`：假 `IElevationClient` 收到 `OperationType == "uninstall.removeResidual"` 的请求，payload JSON 里是路径列表；不需要提权的不进请求。
-  - `Protected_paths_are_refused_before_anything_is_sent`：`ResidueItem.Path` 是根或在 `ProtectedFolders` 里 → 直接 `Success=false`，既不删也不发给帮手。
+- [ ] **Step 1: 写失败的测试** `ResidueRemoverTests`（假的 `IRecycleBin`、假的 `IElevationClient`）：
+  - `Folders_go_to_the_recycle_bin_not_deleted_directly`
+  - `Registry_items_are_refused_and_never_touched`（`Removable == false` → `Success=false`，错误说明"无法在此删除"，回收站和帮手都没被调用）
+  - `One_failing_item_does_not_stop_the_others`（被占用/不存在/拒绝访问各一，假回收站按路径抛异常）
+  - `Items_needing_elevation_are_sent_to_the_helper_and_not_touched_locally`：假 `IElevationClient` 收到 `OperationType == "uninstall.removeResidual"` 的请求，payload `{"folders":[…]}`；不需要提权的不进请求；帮手返回逐项结果时映射回对应的 `RemovalResult`；帮手整体失败（`Success=false` 且无逐项结果）→ 这些项全部失败并带 `ErrorMessage`。
+  - `Protected_paths_are_refused_before_anything_is_sent`：路径是根或在 `ProtectedFolders` 里 → 直接 `Success=false`，既不进回收站也不发给帮手。
 
 - [ ] **Step 2: 运行测试确认失败。** Expected: FAIL，类型不存在。
 
-- [ ] **Step 3: 实现** `ResidueRemover`。注册表导出由本类的私有方法递归写出；字符串转义按 `.reg` 规则（`\` 与 `"`）；先备份、后删除；返回每一项的结果。
+- [ ] **Step 3: 实现** `ResidueRemover`，返回每一项的结果（顺序与输入一致）。
 
 - [ ] **Step 4: 运行测试确认通过。** Expected: PASS。
 
-- [ ] **Step 5: Commit** `feat: remove uninstall leftovers recoverably`
+- [ ] **Step 5: Commit** `feat: remove folder leftovers recoverably`
 
 ---
 
 ## Task 6: 提权帮手端的删除处理（安全敏感）
 
-帮手以管理员权限运行，管道虽然只允许我们的用户连接，但**帮手不能无条件信任请求内容**。
+帮手以管理员权限运行，管道虽然只允许我们的用户连接，但**帮手不能无条件信任请求内容**。只处理文件夹。
 
 **Files:**
 - Create: `src/PowerTools.ElevatedHelper/RemoveResidualHandler.cs`
@@ -233,24 +234,24 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
 
 **Interfaces:**
 - Consumes: `IElevatedOperationHandler`（`OperationType`、`Task<ElevationResponse> HandleAsync(string payloadJson)`）, `ElevationResponse`
-- Produces: `class RemoveResidualHandler : IElevatedOperationHandler`，`OperationType == "uninstall.removeResidual"`；payload：`{"folders":["…"],"registryKeys":["HKLM\\SOFTWARE\\X"]}`；构造函数接受可注入的文件夹白名单根和注册表白名单根（测试用沙箱）。
-- 白名单：文件夹必须位于 `ProgramFiles`、`ProgramFiles(x86)`、`ProgramData` 之下的**至少一层子目录**；注册表键必须是 `HKLM\SOFTWARE\<厂商>[\…]` 或 `HKLM\SOFTWARE\WOW6432Node\<厂商>[\…]`，且第一层不是 `Microsoft`、`Classes`、`Policies`、`Windows` 等受保护名。路径先 `Path.GetFullPath` 规范化，拒绝含 `..`、符号链接/联接点指向白名单外的目录。
+- Produces: `class RemoveResidualHandler : IElevatedOperationHandler`，`OperationType == "uninstall.removeResidual"`；payload：`{"folders":["…"]}`；响应 `ResultJson` 为逐项结果 `[{"path":"…","success":true,"error":null}]`；构造函数接受可注入的白名单根（测试用临时目录）和隔离目录。
+- 白名单：文件夹必须位于 `ProgramFiles`、`ProgramFiles(x86)`、`ProgramData` 之下的**至少一层子目录**，且该子目录名不是受保护名（`Microsoft`、`Windows`、`Common Files`、`Packages` 等）。路径先 `Path.GetFullPath` 规范化，拒绝含 `..`、符号链接/联接点指向白名单外的目录。
 
 - [ ] **Step 1: 写失败的测试** `RemoveResidualHandlerTests`：
-  - `Rejects_path_outside_allowed_roots`（`C:\Windows\System32\x`、`C:\Users\…`）→ `Success=false`，且什么都没删
+  - `Rejects_path_outside_allowed_roots`（`C:\Windows\System32\x`、`C:\Users\…`）→ 该项 `success=false`，什么都没动
   - `Rejects_path_traversal`（`…\Program Files\Foo\..\..\Windows`）
-  - `Rejects_the_roots_themselves_and_protected_vendor_keys`（`HKLM\SOFTWARE`、`HKLM\SOFTWARE\Microsoft`）
+  - `Rejects_the_roots_themselves_and_protected_vendor_folders`
   - `Rejects_junction_that_escapes_the_allowed_root`（临时目录里用 `mklink /J` 造联接点指向白名单外）
-  - `Deletes_allowed_folder_and_key`：此处删除是**真删除**（帮手不碰回收站，因为回收站对提权进程按管理员用户算）；**但**要求调用方 `ResidueRemover` 已经在 Task 5 做了 `.reg` 备份，文件夹则在 Step 3 里改为"移到 `%ProgramData%\PowerTools\Quarantine\<时间戳>\`"以保持可恢复。→ 测试断言：删除后原路径不存在、隔离目录里有该文件夹。
-  - `Mixed_request_reports_per_item_results`：一个被拒绝、一个成功，响应 `ResultJson` 里逐项说明，整体 `Success` 为 false。
+  - `Allowed_folder_is_moved_to_quarantine_not_deleted`：处理后原路径不存在、隔离目录 `%ProgramData%\PowerTools\Quarantine\<时间戳>\` 里有该文件夹（帮手不用回收站，对提权进程它按管理员用户算，用户找不到）。
+  - `Mixed_request_reports_per_item_results`：一个被拒绝、一个成功，整体 `Success` 为 false，`ResultJson` 逐项说明。
 
 - [ ] **Step 2: 运行测试确认失败。** Run: `dotnet test tests/PowerTools.ElevatedHelper.Tests`　Expected: FAIL，`RemoveResidualHandler` 不存在。
 
-- [ ] **Step 3: 实现** `RemoveResidualHandler` 并在 `Program.cs` 注册。文件夹采用"移动到隔离目录"实现可恢复；移动失败（跨卷）则放弃该项并报告原因，**不**回退成直接删除。
+- [ ] **Step 3: 实现** `RemoveResidualHandler` 并在 `Program.cs` 注册。移动失败（跨卷等）则放弃该项并报告原因，**不**回退成直接删除。
 
 - [ ] **Step 4: 运行测试确认通过**，并运行 `dotnet test tests/PowerTools.ElevatedHelper.Tests` 全部（原有 8 个仍应通过）。Expected: PASS。
 
-- [ ] **Step 5: Commit** `feat: add elevated residue removal with an allowlist`
+- [ ] **Step 5: Commit** `feat: add elevated folder quarantine with an allowlist`
 
 ---
 
@@ -276,7 +277,7 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
 
 - [ ] **Step 2: 运行测试确认失败。** Expected: FAIL，`UninstallerModule` 不存在。
 
-- [ ] **Step 3: 实现** `UninstallerModule`：`UninstallAsync` 先 `Capture`（仅 Win32），调用路由，`Completed` 才 `FindLeftovers`。界面：顶部搜索框 + 来源筛选（全部/Win32/商店/Steam）+ 列表（名称、发布者、版本、大小、来源）；选中后"卸载"按钮 → `ContentDialog` 二次确认；卸载完成后若有残留，弹出分组审核面板（按 文件夹 / 注册表 分组，高置信度默认勾选、中置信度默认不勾选，需要管理员的项旁标注"需要管理员权限"），"删除选中项"调用 `RemoveResidueAsync`，完成后显示备份文件位置和"如何恢复"。列表控件沿用 `ListView`，不要给 `ScrollViewer` 加会拦截滚轮的包装（上一轮刚修过滚轮问题）。
+- [ ] **Step 3: 实现** `UninstallerModule`：`UninstallAsync` 先 `Capture`（仅 Win32），调用路由，`Completed` 才 `FindLeftovers`。界面：顶部搜索框 + 来源筛选（全部/Win32/商店/Steam）+ 列表（名称、发布者、版本、大小、来源）；选中后"卸载"按钮 → `ContentDialog` 二次确认；卸载完成后若有残留，弹出分组审核面板（按 文件夹 / 注册表 分组，高置信度文件夹默认勾选、中置信度默认不勾选，需要管理员的项旁标注"需要管理员权限"；注册表项灰显、不可勾选，旁注"无法在此删除，请手动处理"），"删除选中项"调用 `RemoveResidueAsync`，完成后提示"已移到回收站（或隔离目录 %ProgramData%PowerToolsQuarantine）"。列表控件沿用 `ListView`，不要给 `ScrollViewer` 加会拦截滚轮的包装（上一轮刚修过滚轮问题）。
 
 - [ ] **Step 4: 运行测试确认通过，再跑全部测试。** Run: `dotnet test tests/PowerTools.Core.Tests; dotnet test tests/PowerTools.ElevatedHelper.Tests; dotnet test tests/PowerTools.Modules.ContextMenu.Tests; dotnet test tests/PowerTools.Modules.DiskAnalyzer.Tests; dotnet test tests/PowerTools.Modules.Uninstaller.Tests`　Expected: 全部 PASS（不要直接对 `.sln` 跑，里面有用户的 `App1`）。再 `dotnet build src/PowerTools.App -p:Platform=x86` 确认能编译。
 
@@ -290,6 +291,6 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
 
 - [ ] **Step 1:** 部署后（单项目 MSIX 的松散部署不会随 `dotnet build` 刷新，需要先停掉 App，再把构建输出 `robocopy` 进 `bin\<plat>\Debug\…\AppX`）核对列表：与"设置 → 应用 → 已安装的应用"比对数量与名称，记录差异（预期：我们过滤掉更新补丁与系统组件）。
 - [ ] **Step 2:** 卸载一个无害的 Win32 程序（先装一个小工具，如 7-Zip 便携以外的安装版），确认：UAC 由卸载程序自己弹出、取消后界面显示"已取消"、完成后出现残留面板、勾选 `AppData` 下的文件夹删除后出现在回收站里。
-- [ ] **Step 3:** 对一个需要提权的残留（`Program Files` 下遗留目录或 `HKLM` 键）执行删除，确认出现一次 UAC、目录出现在 `%ProgramData%\PowerTools\Quarantine`、`.reg` 备份可双击导入还原。
+- [ ] **Step 3:** 对一个需要提权的残留（`Program Files` 下遗留目录）执行删除，确认出现一次 UAC、目录出现在 `%ProgramData%\PowerTools\Quarantine`。
 - [ ] **Step 4:** 卸载一个 Steam 游戏（只确认 Steam 弹出卸载确认框）与一个 Store 应用（按 Task 1 选定的机制）。
 - [ ] **Step 5:** 记录未覆盖的问题，提交文档。
