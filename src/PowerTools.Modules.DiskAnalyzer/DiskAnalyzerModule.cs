@@ -1,5 +1,6 @@
 using Microsoft.Win32;
 using PowerTools.Core.Modules;
+using PowerTools.Core.Recycling;
 using PowerTools.Modules.DiskAnalyzer.History;
 using PowerTools.Modules.DiskAnalyzer.Scanning;
 using PowerTools.Modules.DiskAnalyzer.Steam;
@@ -14,17 +15,21 @@ public class DiskAnalyzerModule : IToolModule
     private readonly SnapshotStore _snapshotStore;
     private readonly DirectoryScanner _scanner = new();
     private readonly SteamLibraryParser _steamParser = new();
+    private readonly OrphanFolderScanner _orphanScanner = new();
+    private readonly IRecycleBin _recycleBin;
 
     public DiskAnalyzerModule(
         string? steamInstallPathOverride = null,
         string? snapshotDirectory = null,
-        ISteamUninstallLauncher? steamUninstallLauncher = null)
+        ISteamUninstallLauncher? steamUninstallLauncher = null,
+        IRecycleBin? recycleBin = null)
     {
         _steamInstallPathOverride = steamInstallPathOverride;
         _snapshotDirectory = snapshotDirectory
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PowerTools", "DiskAnalyzer", "snapshots");
         _steamUninstallLauncher = steamUninstallLauncher ?? new SteamUninstallLauncher();
         _snapshotStore = new SnapshotStore(_snapshotDirectory);
+        _recycleBin = recycleBin ?? new ShellRecycleBin();
     }
 
     public string ModuleId => "disk-analyzer";
@@ -70,13 +75,7 @@ public class DiskAnalyzerModule : IToolModule
     /// <summary>Installed Steam games across all library folders, largest first; empty when Steam is not available.</summary>
     public IReadOnlyList<SteamGameInfo> GetSteamGames()
     {
-        if (SteamInstallPath is null) return Array.Empty<SteamGameInfo>();
-
-        var libraries = _steamParser.FindLibraryFolders(SteamInstallPath);
-        if (libraries.Count == 0) libraries = new[] { SteamInstallPath };
-
-        return libraries
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+        return GetLibraryFolders()
             .SelectMany(_steamParser.ParseLibrary)
             .GroupBy(game => game.AppId)
             .Select(group => group.First())
@@ -86,6 +85,41 @@ public class DiskAnalyzerModule : IToolModule
     }
 
     public void UninstallSteamGame(string appId) => _steamUninstallLauncher.LaunchUninstall(appId);
+
+    /// <summary>
+    /// Folders under steamapps/common that no appmanifest points to any more; largest first. Only reports
+    /// candidates, never deletes anything. Empty when Steam is not available.
+    /// </summary>
+    public IReadOnlyList<OrphanGameFolder> GetOrphanFolders() => _orphanScanner.Scan(GetLibraryFolders());
+
+    /// <summary>
+    /// Moves an orphan folder to the Recycle Bin. Re-checks that the folder is really under one of the current
+    /// Steam libraries' steamapps/common before touching it, in case a stale or tampered item is passed back in.
+    /// </summary>
+    public Task RemoveOrphanFolderAsync(OrphanGameFolder folder, CancellationToken ct = default)
+    {
+        var allowedRoots = GetLibraryFolders().Select(lib => Path.Combine(lib, "steamapps", "common"));
+        if (!allowedRoots.Any(root => IsDirectChildOf(folder.FullPath, root)))
+        {
+            throw new ArgumentException($"'{folder.FullPath}' is not under a known Steam library's steamapps/common.", nameof(folder));
+        }
+
+        return Task.Run(() => _recycleBin.Delete(folder.FullPath), ct);
+    }
+
+    // Orphan folders are always a direct child of steamapps/common; a tampered request pointing anywhere else is rejected.
+    private static bool IsDirectChildOf(string folderPath, string root)
+        => string.Equals(Path.GetDirectoryName(Path.GetFullPath(folderPath)), Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase);
+
+    private IReadOnlyList<string> GetLibraryFolders()
+    {
+        if (SteamInstallPath is null) return Array.Empty<string>();
+
+        var libraries = _steamParser.FindLibraryFolders(SteamInstallPath);
+        if (libraries.Count == 0) libraries = new[] { SteamInstallPath };
+
+        return libraries.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
 
     private static string? DetectSteamInstallPath()
     {
