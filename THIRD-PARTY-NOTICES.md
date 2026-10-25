@@ -2,7 +2,7 @@
 
 ## Fluent UI System Icons (placeholder icon in the uninstaller list)
 
-`src/PowerTools.App/Assets/app-placeholder.svg` is the "shopping-bag-24-regular" icon from Fluent UI System Icons
+`src/PowerTools.App/Assets/app-placeholder.svg` is the "store-microsoft-20-filled" icon from Fluent UI System Icons
 (https://github.com/microsoft/fluentui-system-icons). Only the width/height and fill colour of the SVG were changed.
 
 MIT License
