@@ -31,3 +31,22 @@
 
 包外建 `%LOCALAPPDATA%\PowerToolsSpikeLocal`、`%APPDATA%\PowerToolsSpikeRoaming`、`C:\ProgramData\PowerToolsSpikeData`（各含一个子目录和文件），从已部署的包里用 `ShellRecycleBin.Delete` 移到回收站：三个都**真的从真实文件系统消失**（包外 `Test-Path` 为 False）。所以文件夹残留的回收站删除在包身份下有效，只有注册表被虚拟化。
 测试产生的三个目录现在在用户的回收站里。
+
+## 补充验证二：包里启动的子进程可以删真实注册表（推翻"注册表只能展示"）
+
+背景：Geek / Revo 的核心是清注册表。前面发现"进程内 `RegistryKey` 删除会被虚拟化"，这里验证"让别的进程来删"行不行。方法同前：包外用 PowerShell 建真实测试键，从已部署的包里用不同方式启动删除，再在包外看真实注册表。
+
+| 方式 | 目标 | 结果 |
+|---|---|---|
+| 包内直接启动子进程 `reg.exe delete "HKCU\...\LeftC" /f` | HKCU | **真的删掉了** |
+| 让资源管理器打开一个 `.cmd`（`explorer.exe x.cmd`，进程不是我们的子进程）里面 `reg delete` | HKCU | **真的删掉了** |
+| 计划任务（`schtasks /create` + `/run`）执行 `reg delete` | HKCU | **真的删掉了** |
+| 包内 `Process.Start("reg.exe", "delete \"HKLM\SOFTWARE\...\LeftE\" /f /reg:64")`，`Verb=runas`（一次 UAC） | HKLM | **真的删掉了**，退出码 0 |
+| WMI `Win32_Process.Create` | HKCU | 我的命令引号写错，没得出结论（不需要，已有可行方式） |
+
+结论：虚拟化只作用于**包进程自己**的注册表 API（`RegistryKey.DeleteSubKeyTree` 等）；它启动的 `reg.exe` 不受影响，HKLM 经 UAC 提权后也可以。所以：
+
+- 注册表残留**可以删**：用 `reg.exe export` 先导出 `.reg` 备份（reg.exe 自己的格式，可双击还原），再 `reg.exe delete <key> /f /reg:64`；HKLM 的项通过提权帮手（帮手是已提权的进程，由它启动 reg.exe）。不需要扩大 `unvirtualizedResources`，也不需要计划任务这类绕行方式。
+- 之前的"注册表只展示、不可删除"的结论作废；帮手端需要新增注册表白名单校验，这部分尚未实现。
+- 审核风险：做法只是启动系统自带的 `reg.exe`，没有借助计划任务或资源管理器绕出沙箱，应当比较稳妥，但提审说明里要写明用途。
+- 实现时注意：`reg.exe` 是 32 位进程的 WOW 重定向会改变 HKLM\SOFTWARE 的视图，必须带 `/reg:64`；路径要用参数数组/严格引号，不能把用户可控字符串拼进命令行。
