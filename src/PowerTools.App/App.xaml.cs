@@ -2,6 +2,7 @@ using Microsoft.UI.Xaml;
 using PowerTools.Core.Modules;
 using PowerTools.Modules.ContextMenu;
 using PowerTools.Modules.DiskAnalyzer;
+using PowerTools.Modules.Uninstaller;
 
 namespace PowerTools.App;
 
@@ -19,6 +20,7 @@ public partial class App : Application
         InitializeComponent();
         Modules.Register(new DiskAnalyzerModule());
         Modules.Register(new ContextMenuModule());
+        Modules.Register(new UninstallerModule());
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)

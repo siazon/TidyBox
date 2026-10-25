@@ -20,6 +20,7 @@
     <ProjectReference Include="..\PowerTools.Core\PowerTools.Core.csproj" />
     <ProjectReference Include="..\PowerTools.Modules.DiskAnalyzer\PowerTools.Modules.DiskAnalyzer.csproj" />
     <ProjectReference Include="..\PowerTools.Modules.ContextMenu\PowerTools.Modules.ContextMenu.csproj" />
+    <ProjectReference Include="..\PowerTools.Modules.Uninstaller\PowerTools.Modules.Uninstaller.csproj" />
     <ProjectReference Include="..\PowerTools.ElevatedHelper\PowerTools.ElevatedHelper.csproj" ReferenceOutputAssembly="false" OutputItemType="ElevatedHelperAssembly" />
   </ItemGroup>
 
@@ -29,6 +30,11 @@
       <Content Include="@(ElevatedHelperAssembly)" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
   </Target>
+
+  <ItemGroup>
+    <!-- PNG assets are picked up by default; SVG is not. -->
+    <Content Include="Assets\app-placeholder.svg" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />

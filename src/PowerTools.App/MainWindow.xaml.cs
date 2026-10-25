@@ -12,6 +12,7 @@ public sealed partial class MainWindow : Window
     {
         ["disk-analyzer"] = typeof(DiskAnalyzerView),
         ["context-menu"] = typeof(ContextMenuView),
+        ["uninstaller"] = typeof(UninstallerView),
     };
 
     private readonly ModuleRegistry _registry;
