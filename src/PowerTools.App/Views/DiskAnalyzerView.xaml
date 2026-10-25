@@ -40,7 +40,7 @@
         <TextBlock x:Name="StatusText" Grid.Row="1" TextWrapping="Wrap"
                    Text="输入文件夹路径后点击“扫描”，或点击“浏览…”选择文件夹。" />
 
-        <Pivot Grid.Row="2">
+        <Pivot x:Name="MainPivot" Grid.Row="2">
             <PivotItem Header="文件夹">
                 <Grid>
                     <Grid.RowDefinitions>

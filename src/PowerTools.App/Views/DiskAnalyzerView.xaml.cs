@@ -175,6 +175,9 @@ public sealed partial class DiskAnalyzerView : Page
         }
 
         var version = ++_scanVersion;
+
+        // The result is in the folder tab; do not leave the user looking at the Steam tab while it is scanning.
+        MainPivot.SelectedIndex = 0;
         SetBusy(true);
         StatusText.Text = $"正在扫描 {path} …";
         try
