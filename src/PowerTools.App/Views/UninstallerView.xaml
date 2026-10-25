@@ -6,6 +6,11 @@
     AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop"
     xmlns:model="using:PowerTools.Modules.Uninstaller.Model">
 
+    <Page.Resources>
+        <!-- Shown for apps whose own icon cannot be found. -->
+        <SvgImageSource x:Key="StorePlaceholder" UriSource="ms-appx:///Assets/microsoft-store.svg" />
+    </Page.Resources>
+
     <Grid Margin="24,16,24,16" RowSpacing="8">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -60,10 +65,10 @@
                             <ColumnDefinition Width="90" />
                             <ColumnDefinition Width="100" />
                         </Grid.ColumnDefinitions>
-                        <!-- The plate keeps white line-art icons (some Store apps) visible on a light theme; the Store bag is the placeholder. -->
+                        <!-- The plate keeps white line-art icons (some Store apps) visible on a light theme; the Microsoft Store logo is the placeholder. -->
                         <Grid Width="32" Height="32" CornerRadius="6" VerticalAlignment="Center"
                               Background="#66808080">
-                            <FontIcon Glyph="&#xE719;" FontSize="16" Opacity="0.6" Visibility="{x:Bind PlaceholderVisibility, Mode=OneWay}" />
+                            <Image Source="{StaticResource StorePlaceholder}" Width="20" Height="20" Visibility="{x:Bind PlaceholderVisibility, Mode=OneWay}" />
                             <Image Source="{x:Bind Icon, Mode=OneWay}" Width="24" Height="24" Visibility="{x:Bind IconVisibility, Mode=OneWay}" />
                         </Grid>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
