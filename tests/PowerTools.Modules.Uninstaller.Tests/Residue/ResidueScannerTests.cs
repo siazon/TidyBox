@@ -185,7 +185,7 @@ public sealed class ResidueScannerTests : IDisposable
     }
 
     [Fact]
-    public void Registry_residue_is_reported_but_never_removable()
+    public void Registry_residue_is_reported_and_removable()
     {
         using (var key = _registry.User.CreateSubKey(@"Software\Postman")) { }
         using (var key = _registry.Machine64.CreateSubKey(@"SOFTWARE\Postman")) { }
@@ -198,7 +198,7 @@ public sealed class ResidueScannerTests : IDisposable
         Assert.All(leftovers, i =>
         {
             Assert.Equal(ResidueKind.RegistryKey, i.Kind);
-            Assert.False(i.Removable);
+            Assert.True(i.Removable);
             Assert.Equal(ResidueConfidence.Medium, i.Confidence);
         });
         Assert.False(leftovers[0].NeedsElevation);

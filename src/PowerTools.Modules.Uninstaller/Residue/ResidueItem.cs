@@ -6,5 +6,5 @@ public enum ResidueKind { Folder, RegistryKey }
 public enum ResidueConfidence { High, Medium }
 
 /// <param name="Path">A folder path, or a registry path like HKCU\Software\X.</param>
-/// <param name="Removable">Registry keys are shown but never removable: a packaged app's deletes are virtualized and never reach the real registry.</param>
+/// <param name="Removable">False for anything that must only be shown, never removed.</param>
 public record ResidueItem(ResidueKind Kind, string Path, ResidueConfidence Confidence, string Reason, bool NeedsElevation, bool Removable);

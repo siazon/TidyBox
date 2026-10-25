@@ -6,7 +6,11 @@ namespace PowerTools.Modules.Uninstaller.Residue;
 
 public record RemovalResult(ResidueItem Item, bool Success, string? Error);
 
-/// <summary>Removes folder leftovers recoverably: user-level folders go to the Recycle Bin, protected ones are quarantined by the elevated helper.</summary>
+/// <summary>
+/// Removes leftovers recoverably. Folders go to the Recycle Bin; registry keys are first exported to a .reg file
+/// (double-click it to restore) and only then deleted. Anything that needs administrator rights is handed to the
+/// elevated helper, which checks the request again.
+/// </summary>
 public sealed class ResidueRemover
 {
     public const string ElevatedOperation = "uninstall.removeResidual";
@@ -14,13 +18,24 @@ public sealed class ResidueRemover
     private readonly IRecycleBin _recycleBin;
     private readonly IElevationClient _elevation;
     private readonly ResidueRoots _roots;
+    private readonly IRegTool _regTool;
+    private int _backupCounter;
 
-    public ResidueRemover(IRecycleBin recycleBin, IElevationClient elevation, ResidueRoots roots)
+    public ResidueRemover(IRecycleBin recycleBin, IElevationClient elevation, ResidueRoots roots, IRegTool? regTool = null, string? backupDirectory = null)
     {
         _recycleBin = recycleBin;
         _elevation = elevation;
         _roots = roots;
+        _regTool = regTool ?? new ProcessRegTool();
+        BackupDirectory = backupDirectory ?? DefaultBackupDirectory();
     }
+
+    /// <summary>Where the .reg backups of removed registry keys are written.</summary>
+    public string BackupDirectory { get; }
+
+    // Documents rather than AppData: a packaged app's AppData writes are redirected into the package, where nobody would look.
+    private static string DefaultBackupDirectory()
+        => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "PowerTools", "RegistryBackups");
 
     /// <returns>One result per input item, in the same order.</returns>
     public async Task<IReadOnlyList<RemovalResult>> RemoveAsync(IReadOnlyList<ResidueItem> items, CancellationToken ct = default)
@@ -31,31 +46,41 @@ public sealed class ResidueRemover
         for (var i = 0; i < items.Count; i++)
         {
             var item = items[i];
-            if (item.Kind != ResidueKind.Folder || !item.Removable)
+            var problem = Check(item);
+            if (problem is not null)
             {
-                results[i] = Fail(item, "无法在这里删除，请手动处理。");
-            }
-            else if (_roots.IsProtectedFolder(item.Path))
-            {
-                results[i] = Fail(item, "这是受保护的位置，不会被删除。");
-            }
-            else if (!Directory.Exists(item.Path))
-            {
-                results[i] = Fail(item, "路径已不存在。");
+                results[i] = Fail(item, problem);
             }
             else if (item.NeedsElevation)
             {
                 elevated.Add(i);
             }
-            else
+            else if (item.Kind == ResidueKind.Folder)
             {
                 results[i] = MoveToRecycleBin(item);
+            }
+            else
+            {
+                results[i] = await RemoveRegistryKeyAsync(item, ct);
             }
         }
 
         if (elevated.Count > 0) await RemoveElevatedAsync(items, elevated, results, ct);
 
         return results!;
+    }
+
+    private string? Check(ResidueItem item)
+    {
+        if (!item.Removable) return "无法在这里删除，请手动处理。";
+
+        if (item.Kind == ResidueKind.Folder)
+        {
+            if (_roots.IsProtectedFolder(item.Path)) return "这是受保护的位置，不会被删除。";
+            return Directory.Exists(item.Path) ? null : "路径已不存在。";
+        }
+
+        return _roots.IsRemovableRegistryKey(item.Path) ? null : "这是受保护的注册表位置，不会被删除。";
     }
 
     private RemovalResult MoveToRecycleBin(ResidueItem item)
@@ -71,13 +96,44 @@ public sealed class ResidueRemover
         }
     }
 
+    private async Task<RemovalResult> RemoveRegistryKeyAsync(ResidueItem item, CancellationToken ct)
+    {
+        try
+        {
+            Directory.CreateDirectory(BackupDirectory);
+            var backup = Path.Combine(BackupDirectory, $"{DateTime.Now:yyyyMMdd-HHmmss}-{Interlocked.Increment(ref _backupCounter)}-{FileSafe(item.Path)}.reg");
+
+            // The backup comes first and must really exist: with no way back, the key is not deleted.
+            var exported = await _regTool.RunAsync(new[] { "export", item.Path, backup, "/y" }, ct);
+            if (exported != 0 || !File.Exists(backup) || new FileInfo(backup).Length == 0)
+            {
+                return Fail(item, "无法备份这个注册表项（可能已经不存在），已放弃删除。");
+            }
+
+            var deleted = await _regTool.RunAsync(new[] { "delete", item.Path, "/f" }, ct);
+            return deleted == 0 ? new RemovalResult(item, true, null) : Fail(item, $"删除注册表项失败（reg.exe 返回 {deleted}）。备份仍保留在 {backup}。");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return Fail(item, ex.Message);
+        }
+    }
+
+    private static string FileSafe(string registryPath)
+    {
+        var chars = registryPath.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray();
+        return new string(chars).Substring(0, Math.Min(chars.Length, 80));
+    }
+
     private async Task RemoveElevatedAsync(IReadOnlyList<ResidueItem> items, List<int> indexes, RemovalResult?[] results, CancellationToken ct)
     {
-        var paths = indexes.Select(i => items[i].Path).ToArray();
+        var folders = indexes.Where(i => items[i].Kind == ResidueKind.Folder).Select(i => items[i].Path).ToArray();
+        var keys = indexes.Where(i => items[i].Kind == ResidueKind.RegistryKey).Select(i => items[i].Path).ToArray();
+
         ElevationResponse response;
         try
         {
-            response = await _elevation.ExecuteAsync(new ElevationRequest(ElevatedOperation, JsonSerializer.Serialize(new { folders = paths })), ct);
+            response = await _elevation.ExecuteAsync(new ElevationRequest(ElevatedOperation, JsonSerializer.Serialize(new { folders, registryKeys = keys })), ct);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

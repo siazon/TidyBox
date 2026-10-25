@@ -14,6 +14,7 @@ public sealed class ResidueRoots
     {
         "microsoft", "windows", "windowsnt", "windowsapps", "commonfiles", "packages", "classes", "policies",
         "wow6432node", "programs", "microsoftshared", "internetexplorer", "windowspowershell", "dotnet", "temp",
+        "clients", "registeredapplications", "odbc",
     };
 
     public ResidueRoots(IReadOnlyList<string> folderRoots, IReadOnlyList<string> elevatedFolderRoots, IReadOnlyList<RegistryRoot> registryRoots)
@@ -40,6 +41,28 @@ public sealed class ResidueRoots
         if (windows.Length > 0 && (SamePath(path, windows) || IsUnder(FullPath(path), FullPath(windows)))) return true;
 
         return FolderRoots.Concat(ElevatedFolderRoots).Any(r => SamePath(path, r));
+    }
+
+    /// <summary>
+    /// True only for a key directly below one of the registry roots, or one level deeper (Vendor\App), whose first
+    /// name is not a protected one. The roots themselves and anything else are never removable.
+    /// </summary>
+    public bool IsRemovableRegistryKey(string path)
+    {
+        foreach (var root in RegistryRoots)
+        {
+            var prefix = $@"{root.Hive}\{root.Path}\";
+            if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+
+            var segments = path.Substring(prefix.Length).Split('\\');
+            if (segments.Length is < 1 or > 2) continue;
+            if (segments.Any(s => s.Length == 0 || s == "." || s == "..")) continue;
+            if (ProtectedNames.Contains(ResidueScanner.Normalize(segments[0]))) continue;
+
+            return true;
+        }
+
+        return false;
     }
 
     internal static string FullPath(string path) => Path.GetFullPath(path).TrimEnd('\\');

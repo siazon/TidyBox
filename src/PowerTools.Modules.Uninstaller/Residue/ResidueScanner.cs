@@ -138,7 +138,7 @@ public sealed class ResidueScanner
             Removable: true);
 
     private static ResidueItem RegistryItem(RegistryRoot root, string relativePath, string reason)
-        => new(ResidueKind.RegistryKey, $@"{root.Hive}\{relativePath}", ResidueConfidence.Medium, reason, root.NeedsElevation, Removable: false);
+        => new(ResidueKind.RegistryKey, $@"{root.Hive}\{relativePath}", ResidueConfidence.Medium, reason, root.NeedsElevation, Removable: true);
 
     private static IEnumerable<string> SafeDirectories(string folder)
     {
