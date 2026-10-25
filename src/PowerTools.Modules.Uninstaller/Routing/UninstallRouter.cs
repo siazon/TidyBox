@@ -96,7 +96,7 @@ public sealed class UninstallRouter
 
         var launcher = Path.GetFileName(command.FileName);
         return HandOverLaunchers.Contains(launcher, StringComparer.OrdinalIgnoreCase)
-            ? new UninstallOutcome(UninstallStatus.MaybeStillRunning, exitCode, "卸载可能还在后台进行，稍后请重新扫描。")
+            ? new UninstallOutcome(UninstallStatus.MaybeStillRunning, exitCode, "卸载可能还在后台进行，稍后请刷新列表确认。")
             : new UninstallOutcome(UninstallStatus.Completed, exitCode, null);
     }
 }

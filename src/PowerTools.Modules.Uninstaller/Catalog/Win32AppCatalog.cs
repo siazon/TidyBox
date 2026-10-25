@@ -7,7 +7,7 @@ using PowerTools.Modules.Uninstaller.Model;
 namespace PowerTools.Modules.Uninstaller.Catalog;
 
 /// <summary>Installed desktop programs from the three Uninstall registry roots; Steam games show up here too.</summary>
-public sealed class Win32AppCatalog
+public sealed class Win32AppCatalog : IAppCatalog
 {
     public const string UninstallPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
 

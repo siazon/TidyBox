@@ -3,7 +3,7 @@ using PowerTools.Modules.Uninstaller.Model;
 namespace PowerTools.Modules.Uninstaller.Catalog;
 
 /// <summary>Microsoft Store (MSIX) apps; frameworks, resource packs and system packages are not something a user uninstalls.</summary>
-public sealed class StoreAppCatalog
+public sealed class StoreAppCatalog : IAppCatalog
 {
     private readonly IStorePackageSource _source;
 

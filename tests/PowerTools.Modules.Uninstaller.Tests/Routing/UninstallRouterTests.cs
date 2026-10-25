@@ -1,42 +1,12 @@
 using System.ComponentModel;
 using PowerTools.Modules.Uninstaller.Model;
 using PowerTools.Modules.Uninstaller.Routing;
+using PowerTools.Modules.Uninstaller.Tests.Support;
 
 namespace PowerTools.Modules.Uninstaller.Tests.Routing;
 
 public class UninstallRouterTests
 {
-    private sealed class FakeRunner : IProcessRunner
-    {
-        public (string FileName, string Arguments)? Started;
-        public Func<int> Result = () => 0;
-
-        public Task<int> RunAndWaitAsync(string fileName, string arguments, CancellationToken ct)
-        {
-            Started = (fileName, arguments);
-            return Task.FromResult(Result());
-        }
-    }
-
-    private sealed class FakeStore : IStoreRemover
-    {
-        public string? Removed;
-        public Exception? Throw;
-
-        public Task RemoveAsync(string packageFullName, CancellationToken ct)
-        {
-            Removed = packageFullName;
-            return Throw is null ? Task.CompletedTask : Task.FromException(Throw);
-        }
-    }
-
-    private sealed class FakeUrls : IUrlLauncher
-    {
-        public Uri? Opened;
-
-        public void Open(Uri uri) => Opened = uri;
-    }
-
     private readonly FakeRunner _runner = new();
     private readonly FakeStore _store = new();
     private readonly FakeUrls _urls = new();
