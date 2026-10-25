@@ -186,3 +186,126 @@ public sealed class RemoveResidualHandlerTests : IDisposable
         Assert.False(response.Success);
     }
 }
+
+public sealed class RemoveResidualHandlerRegistryTests : IDisposable
+{
+    private sealed class FakeRegistryTool : IRegistryTool
+    {
+        public List<string[]> Calls = new();
+        public Func<string[], int> ExitCode = _ => 0;
+        public bool CreateBackupFile = true;
+
+        public int Run(IReadOnlyList<string> args)
+        {
+            Calls.Add(args.ToArray());
+            if (args[0] == "export" && CreateBackupFile)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(args[2])!);
+                File.WriteAllText(args[2], "Windows Registry Editor Version 5.00");
+            }
+
+            return ExitCode(args.ToArray());
+        }
+    }
+
+    private readonly string _base = Path.Combine(Path.GetTempPath(), "PowerToolsTests", Guid.NewGuid().ToString("N"));
+    private readonly FakeRegistryTool _tool = new();
+
+    public RemoveResidualHandlerRegistryTests() => Directory.CreateDirectory(_base);
+
+    public void Dispose() => Directory.Delete(_base, recursive: true);
+
+    private RemoveResidualHandler Handler() => new(new[] { Path.Combine(_base, "Program Files") }, Path.Combine(_base, "Quarantine"), _tool);
+
+    private async Task<(bool Success, List<(string Path, bool Success, string? Error)> Items)> Run(params string[] keys)
+    {
+        var response = await Handler().HandleAsync(JsonSerializer.Serialize(new { folders = Array.Empty<string>(), registryKeys = keys }));
+        var items = new List<(string, bool, string?)>();
+        if (response.ResultJson is not null)
+        {
+            using var doc = JsonDocument.Parse(response.ResultJson);
+            foreach (var e in doc.RootElement.EnumerateArray())
+            {
+                items.Add((e.GetProperty("path").GetString()!, e.GetProperty("success").GetBoolean(),
+                    e.GetProperty("error").ValueKind == JsonValueKind.String ? e.GetProperty("error").GetString() : null));
+            }
+        }
+
+        return (response.Success, items);
+    }
+
+    [Theory]
+    [InlineData(@"HKLM\SOFTWARE\Foo")]
+    [InlineData(@"HKLM\SOFTWARE\Vendor\Foo")]
+    [InlineData(@"HKLM\SOFTWARE\WOW6432Node\Foo")]
+    [InlineData(@"hklm\software\Foo")]
+    public async Task A_vendor_or_app_key_is_exported_to_quarantine_then_deleted_in_the_64_bit_view(string key)
+    {
+        var (success, items) = await Run(key);
+
+        Assert.True(success);
+        Assert.True(items.Single().Success);
+        Assert.Equal(2, _tool.Calls.Count);
+        Assert.Equal(new[] { "export", key }, _tool.Calls[0].Take(2));
+        Assert.Contains("/reg:64", _tool.Calls[0]);
+        Assert.StartsWith(Path.Combine(_base, "Quarantine"), _tool.Calls[0][2]);
+        Assert.Equal(new[] { "delete", key, "/f", "/reg:64" }, _tool.Calls[1]);
+    }
+
+    [Theory]
+    [InlineData(@"HKLM\SOFTWARE")]
+    [InlineData(@"HKLM\SOFTWARE\Microsoft")]
+    [InlineData(@"HKLM\SOFTWARE\Microsoft\Foo")]
+    [InlineData(@"HKLM\SOFTWARE\Classes\Foo")]
+    [InlineData(@"HKLM\SOFTWARE\Policies\Foo")]
+    [InlineData(@"HKLM\SOFTWARE\WOW6432Node")]
+    [InlineData(@"HKLM\SOFTWARE\WOW6432Node\Microsoft")]
+    [InlineData(@"HKLM\SYSTEM\CurrentControlSet\Foo")]
+    [InlineData(@"HKCU\Software\Foo")]
+    [InlineData(@"HKLM\SOFTWARE\A\B\C")]
+    [InlineData(@"HKLM\SOFTWARE\Foo\..\Bar")]
+    [InlineData(@"HKLM\SOFTWARE\Foo\")]
+    [InlineData("HKLM\\SOFTWARE\\Foo\" /v x")]
+    [InlineData(@"HKLM\SOFTWARE\Fo*")]
+    [InlineData("")]
+    public async Task Everything_else_is_rejected_without_running_reg_exe(string key)
+    {
+        var (success, items) = await Run(key);
+
+        Assert.False(success);
+        Assert.False(items.Single().Success);
+        Assert.Empty(_tool.Calls);
+    }
+
+    [Fact]
+    public async Task A_failed_export_prevents_the_delete()
+    {
+        _tool.ExitCode = args => args[0] == "export" ? 1 : 0;
+
+        var (success, items) = await Run(@"HKLM\SOFTWARE\Foo");
+
+        Assert.False(success);
+        Assert.False(items.Single().Success);
+        Assert.DoesNotContain(_tool.Calls, call => call[0] == "delete");
+    }
+
+    [Fact]
+    public async Task An_export_without_a_backup_file_prevents_the_delete()
+    {
+        _tool.CreateBackupFile = false;
+
+        var (success, _) = await Run(@"HKLM\SOFTWARE\Foo");
+
+        Assert.False(success);
+        Assert.DoesNotContain(_tool.Calls, call => call[0] == "delete");
+    }
+
+    [Fact]
+    public async Task Good_and_bad_keys_in_one_request_get_their_own_results()
+    {
+        var (success, items) = await Run(@"HKLM\SOFTWARE\Good", @"HKLM\SOFTWARE\Microsoft");
+
+        Assert.False(success);
+        Assert.Equal(new[] { true, false }, items.Select(i => i.Success));
+    }
+}
