@@ -5,12 +5,16 @@ namespace PowerTools.Modules.Uninstaller.Routing;
 
 public enum UninstallStatus { Completed, Failed, MaybeStillRunning, NotAvailable }
 
-public record UninstallOutcome(UninstallStatus Status, int? ExitCode, string? Message);
+/// <param name="NeedsAdministrator">The uninstaller refused to start for this user; running it as administrator may work.</param>
+public record UninstallOutcome(UninstallStatus Status, int? ExitCode, string? Message, bool NeedsAdministrator = false);
 
 /// <summary>One "uninstall" entry point; the app's source decides which of the three mechanisms does the work.</summary>
 public sealed class UninstallRouter
 {
     private const int ErrorCancelled = 1223; // the user declined the UAC prompt
+    private const int ErrorAccessDenied = 5; // the file is there, but this user may not run it
+
+    private static readonly char[] ShellOperators = { '&', '|', '<', '>', '^', '%', '\r', '\n' };
 
     // Success codes of Windows Installer that still mean "done": reboot initiated / reboot required.
     private static readonly int[] RebootRequired = { 1641, 3010 };
@@ -29,11 +33,12 @@ public sealed class UninstallRouter
         _urls = urls;
     }
 
-    public Task<UninstallOutcome> UninstallAsync(InstalledApp app, CancellationToken ct = default) => app.Source switch
+    /// <param name="asAdministrator">Only for desktop programs: retry through an elevated command prompt, for uninstallers the current user may not run.</param>
+    public Task<UninstallOutcome> UninstallAsync(InstalledApp app, bool asAdministrator = false, CancellationToken ct = default) => app.Source switch
     {
         AppSource.Steam => Task.FromResult(UninstallSteam(app)),
         AppSource.Store => UninstallStoreAsync(app, ct),
-        _ => UninstallWin32Async(app, ct),
+        _ => UninstallWin32Async(app, asAdministrator, ct),
     };
 
     // The id ends up in a ShellExecute call and came from the registry, so accept digits only.
@@ -67,7 +72,7 @@ public sealed class UninstallRouter
         }
     }
 
-    private async Task<UninstallOutcome> UninstallWin32Async(InstalledApp app, CancellationToken ct)
+    private async Task<UninstallOutcome> UninstallWin32Async(InstalledApp app, bool asAdministrator, CancellationToken ct)
     {
         var command = UninstallCommandParser.Parse(app.UninstallString);
         if (command is null)
@@ -75,14 +80,32 @@ public sealed class UninstallRouter
             return new UninstallOutcome(UninstallStatus.NotAvailable, null, "这个程序没有登记卸载命令。");
         }
 
+        var (file, arguments) = (command.FileName, command.Arguments);
+        if (asAdministrator)
+        {
+            // cmd would act on these in a command line that came from the registry, now with administrator rights.
+            if (file.IndexOfAny(ShellOperators) >= 0 || arguments.IndexOfAny(ShellOperators) >= 0)
+            {
+                return new UninstallOutcome(UninstallStatus.Failed, null, "这个程序的卸载命令含有特殊字符，无法安全地以管理员身份运行。");
+            }
+
+            // The outer quotes are the ones cmd /c strips, so a path with spaces keeps its own.
+            var line = $"\"{command.FileName}\" {command.Arguments}".TrimEnd();
+            (file, arguments) = ("cmd.exe", $"/c \"{line}\"");
+        }
+
         int exitCode;
         try
         {
-            exitCode = await _runner.RunAndWaitAsync(command.FileName, command.Arguments, ct);
+            exitCode = await _runner.RunAndWaitAsync(file, arguments, ct, asAdministrator);
         }
         catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorCancelled)
         {
             return new UninstallOutcome(UninstallStatus.Failed, null, "已取消（未授予管理员权限）。");
+        }
+        catch (Win32Exception ex) when (ex.NativeErrorCode == ErrorAccessDenied && !asAdministrator)
+        {
+            return new UninstallOutcome(UninstallStatus.Failed, null, "当前用户没有权限运行这个程序的卸载程序（通常只有管理员能运行）。", NeedsAdministrator: true);
         }
         catch (Win32Exception ex)
         {

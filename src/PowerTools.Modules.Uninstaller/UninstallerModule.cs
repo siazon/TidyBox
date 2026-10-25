@@ -83,12 +83,12 @@ public sealed class UninstallerModule : IToolModule
     });
 
     /// <summary>Uninstalls the app; for a desktop program that uninstalled cleanly, also looks for what it left behind.</summary>
-    public async Task<UninstallResult> UninstallAsync(InstalledApp app, CancellationToken ct = default)
+    public async Task<UninstallResult> UninstallAsync(InstalledApp app, bool asAdministrator = false, CancellationToken ct = default)
     {
         // Steam cleans up after its own games and the system after Store packages; only desktop programs get a scan.
         var before = app.Source == AppSource.Win32 ? await Task.Run(() => _scanner.Capture(app), ct) : null;
 
-        var outcome = await _router.UninstallAsync(app, ct);
+        var outcome = await _router.UninstallAsync(app, asAdministrator, ct);
 
         var leftovers = before is not null && outcome.Status == UninstallStatus.Completed
             ? await Task.Run(() => _scanner.FindLeftovers(app, before), ct)

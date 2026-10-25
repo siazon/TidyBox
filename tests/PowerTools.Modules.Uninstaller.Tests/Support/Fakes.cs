@@ -5,11 +5,13 @@ namespace PowerTools.Modules.Uninstaller.Tests.Support;
 public sealed class FakeRunner : IProcessRunner
 {
     public (string FileName, string Arguments)? Started;
+    public bool StartedAsAdministrator;
     public Func<int> Result = () => 0;
 
-    public Task<int> RunAndWaitAsync(string fileName, string arguments, CancellationToken ct)
+    public Task<int> RunAndWaitAsync(string fileName, string arguments, CancellationToken ct, bool asAdministrator = false)
     {
         Started = (fileName, arguments);
+        StartedAsAdministrator = asAdministrator;
         return Task.FromResult(Result());
     }
 }

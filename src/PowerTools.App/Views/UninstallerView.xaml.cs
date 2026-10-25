@@ -230,6 +230,12 @@ public sealed partial class UninstallerView : Page
         try
         {
             var result = await _module.UninstallAsync(app);
+            if (result.Outcome.NeedsAdministrator && await AskToRetryAsAdministratorAsync(app))
+            {
+                StatusText.Text = $"正在以管理员身份卸载“{app.DisplayName}”…";
+                result = await _module.UninstallAsync(app, asAdministrator: true);
+            }
+
             var outcome = result.Outcome;
 
             // Reloading rewrites the status line, so the outcome is written after it or a failure would vanish at once.
@@ -255,6 +261,20 @@ public sealed partial class UninstallerView : Page
         }
 
         if (deferred is not null) await ScanLaterAsync(app, deferred);
+    }
+
+    private async Task<bool> AskToRetryAsAdministratorAsync(InstalledApp app)
+    {
+        var ask = new ContentDialog
+        {
+            Title = "需要管理员权限",
+            Content = $"“{app.DisplayName}”的卸载程序不允许当前用户运行。\n\n是否以管理员身份重试？会弹出 Windows 的权限确认（UAC），确认窗口里显示的是“Windows 命令处理程序”（cmd.exe），由它来启动这个卸载程序。",
+            PrimaryButtonText = "以管理员身份重试",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        return await ask.ShowAsync() == ContentDialogResult.Primary;
     }
 
     // The uninstaller handed over to a background process: wait (bounded, and without blocking the buttons) until the

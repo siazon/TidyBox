@@ -5,7 +5,7 @@ namespace PowerTools.Modules.Uninstaller.Routing;
 
 public interface IProcessRunner
 {
-    Task<int> RunAndWaitAsync(string fileName, string arguments, CancellationToken ct);
+    Task<int> RunAndWaitAsync(string fileName, string arguments, CancellationToken ct, bool asAdministrator = false);
 }
 
 public interface IStoreRemover
@@ -21,9 +21,11 @@ public interface IUrlLauncher
 /// <summary>Starts the program through the shell, so an uninstaller that needs administrator rights shows its own UAC prompt.</summary>
 public sealed class ShellProcessRunner : IProcessRunner
 {
-    public async Task<int> RunAndWaitAsync(string fileName, string arguments, CancellationToken ct)
+    public async Task<int> RunAndWaitAsync(string fileName, string arguments, CancellationToken ct, bool asAdministrator = false)
     {
-        using var process = Process.Start(new ProcessStartInfo(fileName, arguments) { UseShellExecute = true })
+        var start = new ProcessStartInfo(fileName, arguments) { UseShellExecute = true };
+        if (asAdministrator) start.Verb = "runas";
+        using var process = Process.Start(start)
             ?? throw new InvalidOperationException($"Could not start '{fileName}'.");
         await process.WaitForExitAsync(ct);
         return process.ExitCode;

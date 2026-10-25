@@ -95,6 +95,19 @@ public sealed class UninstallerModuleTests : IDisposable
     }
 
     [Fact]
+    public async Task An_administrator_retry_still_scans_for_leftovers_afterwards()
+    {
+        var install = Directory.CreateDirectory(Path.Combine(_appData, "Odd Tool")).FullName;
+        var app = App("Whatever", uninstall: "\"C:\\a\\unins.exe\"", installLocation: install);
+
+        var result = await Module().UninstallAsync(app, asAdministrator: true);
+
+        Assert.True(_runner.StartedAsAdministrator);
+        Assert.Equal(UninstallStatus.Completed, result.Outcome.Status);
+        Assert.Equal(install, Assert.Single(result.Leftovers).Path);
+    }
+
+    [Fact]
     public async Task Leftovers_that_the_uninstaller_removed_are_not_reported()
     {
         var install = Directory.CreateDirectory(Path.Combine(_appData, "Odd Tool")).FullName;
