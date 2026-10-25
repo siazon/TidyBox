@@ -44,7 +44,7 @@
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="model:InstalledApp">
-                    <Grid ColumnSpacing="12">
+                    <Grid ColumnSpacing="12" AutomationProperties.Name="{x:Bind DisplayName}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="90" />
