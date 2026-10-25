@@ -69,3 +69,12 @@
 - 白色线稿的图标（比如 Codex）在浅色背景上看不见，界面里要给图标垫一块浅灰/半透明的小底板。
 - 开销：150 多项在后台限流取，约几秒，不阻塞列表；缓存不是第一版必需。
 - 没有新的权限或清单改动。
+
+## 补充验证四：注册表残留删除（已实现）端到端结果
+
+在已部署的包里用真实的 `UninstallerModule.RemoveResidueAsync` 删除三项测试数据（包外创建）：`HKCU\Software\PowerToolsSpike`、`HKLM\SOFTWARE\PowerToolsSpike`、`C:\ProgramData\PowerToolsSpikeDir`。
+
+- 三项都成功；`HKCU` 的 `.reg` 备份在 `文档\PowerTools\RegistryBackups`，`HKLM` 的备份和文件夹在 `C:\ProgramData\PowerTools\Quarantine\<时间戳>\`（`registry\` 子目录和原文件夹）。
+- 用 `reg import` 导入两个备份后，两个键、子键和值都完整恢复。
+- `HKLM` 那项经提权帮手执行，整个过程只出现一次 UAC。
+- 测试数据和备份已清理。

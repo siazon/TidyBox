@@ -24,11 +24,12 @@ public sealed class ResidueRow
     {
         get
         {
-            if (!Item.Removable) return "无法在这里删除，请用注册表编辑器手动处理";
+            if (!Item.Removable) return "无法在这里删除，请手动处理";
 
+            var kind = Item.Kind == ResidueKind.RegistryKey ? "注册表项 · " : "";
             var confidence = Item.Confidence == ResidueConfidence.High ? "可信度高" : "仅名称匹配，请确认";
             var admin = Item.NeedsElevation ? " · 需要管理员权限" : "";
-            return $"{Item.Reason} · {confidence}{admin}";
+            return $"{kind}{Item.Reason} · {confidence}{admin}";
         }
     }
 }

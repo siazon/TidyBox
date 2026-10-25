@@ -92,7 +92,7 @@
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
             <StackPanel Spacing="8">
                 <TextBlock x:Name="ResidueTitle" FontWeight="SemiBold" TextWrapping="Wrap" />
-                <TextBlock Text="勾选后会移到回收站（需要管理员权限的移到 C:\ProgramData\PowerTools\Quarantine），之后仍可还原。注册表残留无法在这里删除。"
+                <TextBlock Text="勾选后文件夹会移到回收站（需要管理员权限的移到 C:\ProgramData\PowerTools\Quarantine）；注册表项会先备份成 .reg 文件再删除，双击备份文件即可还原。"
                            TextWrapping="Wrap" Opacity="0.7" />
                 <ListView x:Name="ResidueList" SelectionMode="None" MaxHeight="220">
                     <ListView.ItemContainerStyle>

@@ -102,6 +102,9 @@ public sealed class UninstallerModule : IToolModule
     public InstalledApp? FindAppByPath(IEnumerable<InstalledApp> apps, string path)
         => ShortcutResolver.Resolve(path) is { } target ? AppMatcher.Find(apps, target) : null;
 
+    /// <summary>Where the .reg backups of removed registry keys are written (double-click one to restore).</summary>
+    public string RegistryBackupDirectory => _remover.BackupDirectory;
+
     public Task<IReadOnlyList<RemovalResult>> RemoveResidueAsync(IReadOnlyList<ResidueItem> items, CancellationToken ct = default)
         => _remover.RemoveAsync(items, ct);
 }

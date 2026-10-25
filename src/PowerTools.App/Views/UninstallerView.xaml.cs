@@ -275,9 +275,12 @@ public sealed partial class UninstallerView : Page
             ResidueList.ItemsSource = remaining;
             if (remaining.Count == 0) ResiduePanel.Visibility = Visibility.Collapsed;
 
+            var restore = results.Any(r => r.Success && r.Item.Kind == ResidueKind.RegistryKey)
+                ? $"注册表备份在 {_module.RegistryBackupDirectory}（需要管理员权限的备份在 Quarantine 目录里）。"
+                : "";
             StatusText.Text = failed.Count == 0
-                ? $"已移除 {results.Count} 项，可在回收站或 Quarantine 目录中找回。"
-                : $"已移除 {results.Count - failed.Count} 项，{failed.Count} 项失败：{failed[0].Item.Path} —— {failed[0].Error}";
+                ? $"已移除 {results.Count} 项，文件夹可在回收站或 Quarantine 目录中找回。{restore}"
+                : $"已移除 {results.Count - failed.Count} 项，{failed.Count} 项失败：{failed[0].Item.Path} —— {failed[0].Error} {restore}";
         }
         catch (Exception ex)
         {
