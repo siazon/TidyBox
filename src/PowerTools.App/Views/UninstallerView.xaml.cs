@@ -63,7 +63,7 @@ public sealed partial class UninstallerView : Page
     private async Task MeasureMissingSizesAsync()
     {
         var cts = _measuring = new CancellationTokenSource();
-        var pending = _all.Where(row => row.SizeBytes is null && row.App.Source != AppSource.Store).ToList();
+        var pending = _all.Where(row => row.SizeBytes is null).ToList();
         foreach (var row in pending) row.Measuring = true;
 
         using var gate = new SemaphoreSlim(3);
@@ -75,6 +75,7 @@ public sealed partial class UninstallerView : Page
                 try
                 {
                     row.SizeBytes = await _module.MeasureSizeAsync(row.App, cts.Token);
+                    row.SizeChecked = true;
                 }
                 finally
                 {

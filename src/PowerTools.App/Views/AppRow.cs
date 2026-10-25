@@ -9,6 +9,7 @@ public sealed class AppRow : INotifyPropertyChanged
 {
     private long? _sizeBytes;
     private bool _measuring;
+    private bool _sizeChecked;
 
     public AppRow(InstalledApp app)
     {
@@ -59,6 +60,16 @@ public sealed class AppRow : INotifyPropertyChanged
         set => Set(ref _measuring, value);
     }
 
+    /// <summary>True once the program's folder has been looked at, whether or not that gave a size.</summary>
+    public bool SizeChecked
+    {
+        get => _sizeChecked;
+        set => Set(ref _sizeChecked, value);
+    }
+
+    /// <summary>Why there is no size, shown on hover; null while there is one or it is still being worked out.</summary>
+    public string? SizeTooltip => SizeBytes is null && SizeChecked && !Measuring ? AppSizer.UnknownReason(App) : null;
+
     private Microsoft.UI.Xaml.Media.ImageSource? _icon;
 
     /// <summary>Arrives after the list is shown; until then (or when none was found) the placeholder is displayed.</summary>
@@ -74,7 +85,7 @@ public sealed class AppRow : INotifyPropertyChanged
 
     public string SizeText => SizeBytes switch
     {
-        null => Measuring ? "计算中…" : "",
+        null => Measuring ? "计算中…" : SizeChecked ? "无法确定" : "",
         >= 1L << 30 => $"{SizeBytes.Value / (double)(1L << 30):0.0} GB",
         >= 1L << 20 => $"{SizeBytes.Value / (double)(1L << 20):0.#} MB",
         _ => $"{Math.Max(1, SizeBytes.Value >> 10)} KB",

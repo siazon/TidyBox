@@ -135,9 +135,12 @@ public sealed class UninstallerModule : IToolModule
     public Task WatchLeftoversAsync(IReadOnlyList<ResidueItem> items, Action<IReadOnlyList<ResidueItem>> onShrunk, CancellationToken ct = default)
         => Task.Run(() => LeftoverWatcher.WatchAsync(items, item => !_remover.IsGone(item), onShrunk, _watchOptions, _delay, ct), ct);
 
-    /// <summary>Real size of the program's folder, for entries whose registry record has no size; null when the folder is unknown.</summary>
+    /// <summary>
+    /// Real size of the program's folder (for a Store app, plus its data), for entries that have no recorded size; null when
+    /// the folder is unknown.
+    /// </summary>
     public Task<long?> MeasureSizeAsync(InstalledApp app, CancellationToken ct = default)
-        => Task.Run(() => AppFolder.Resolve(app) is { } folder ? FolderSizer.Measure(folder, ct) : null, ct);
+        => Task.Run(() => AppSizer.Measure(app, ct), ct);
 
     /// <summary>The app's icon as PNG bytes; null when none can be found, so the caller shows a placeholder.</summary>
     public Task<byte[]?> GetIconPngAsync(InstalledApp app, CancellationToken ct = default) => _icons.GetPngAsync(app, ct);
