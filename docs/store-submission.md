@@ -49,6 +49,7 @@
 - 帮手**不删除**：文件夹被移动到 `C:\ProgramData\PowerTools\Quarantine\<时间戳>\`，注册表键先用 `reg export` 备份到同一隔离区，备份文件不存在或为空则不删除。
 - 隔离区目录属主为 Administrators，权限不继承，只有 SYSTEM 和 Administrators 可访问 ［实测，提权下核对过］。
 - "以管理员身份重试"（卸载程序只允许管理员运行时）：先弹确认对话框，用户同意后通过提权的 `cmd.exe` 启动该程序登记的卸载命令。命令里含 `& | < > ^ %` 或换行时拒绝。UAC 窗口里显示的程序是 `cmd.exe`。
+- "分析此文件夹"右键菜单（可选，由用户开启）通过 manifest 声明的应用执行别名 `PowerTools.exe`（`windows.appExecutionAlias`，不需要任何 capability）启动应用，命令是 `PowerTools.exe --analyze "<文件夹>"`。若应用已在运行，新启动的副本通过本地命名管道（名称含当前用户 SID，只接受当前用户连接，只收一条不超过 32 KB 的绝对路径）把文件夹交给已运行的窗口后立即退出。收到路径后只做磁盘扫描（只读），不修改任何东西。
 - 目前帮手只注册了一个操作：`uninstall.removeResidual`。右键菜单模块只写 `HKCU`，不使用帮手。
 
 仍需知道的局限（已记入遗留项，非阻塞）：帮手信任应用在 `ProgramData` 内选择的子目录（受白名单约束）；移动失败时会留下空的时间戳目录；同一用户下的其他进程理论上也能连管道，所以白名单就是安全边界，不是管道。
@@ -62,7 +63,7 @@
 | 帮手大小 | 帮手是第二个 exe，自包含会带第二份 .NET 运行时 | 看打出的包大小；必要时让两个 exe 共享同一份运行时目录 |
 | 架构 | 本机开发用 x86 | 提交 x64 + ARM64（可打成 bundle）。帮手已处理"32 位进程看到 `Program Files (x86)`"的问题，64 位版本也需复测提权清理 |
 | 最低系统 | `MinVersion="10.0.22000.0"`（Win11） | 保持；描述里写明"仅支持 Windows 11" |
-| 图标/Logo | `Assets\*.png` 是脚手架默认图 | 换成自己的原创 Logo（Store Logo、Square44/150、Wide310x150、SplashScreen） |
+| 图标/Logo | 已换成原创的饼图（磁贴、任务栏、Store Logo、启动画面、窗口左上角、程序文件图标、右键菜单图标，源文件 `Assets\PowerTools.ico` 和 `Assets\*.png`） | 脚手架原来那个图形太像别家的商标，已不再使用。上架前如有正式设计，替换这些文件即可 |
 | 应用内占位图标 | 列表里找不到应用图标时显示 Fluent 的 `store-microsoft-20-filled`（MIT） | 形状接近 Microsoft Store 的购物袋，有商标顾虑（政策 11.2 对第三方名称和 Logo 有要求）。上架前建议换成一个通用的、非品牌的图形 |
 | 第三方声明 | `THIRD-PARTY-NOTICES.md` 已含 Fluent UI System Icons (MIT) | 提交前核对依赖里其余许可证（WindowsAppSDK 等）是否都已列出 |
 | 隐私政策 | 应用不联网、不收集个人数据 | 在 Partner Center 如实填写；如果表单要求链接，准备一个简短的静态页面 |
@@ -78,6 +79,7 @@ PowerTools 是一个 Windows 11 维护工具箱：查看磁盘空间占用、管
 ### 4.2 功能列表（只写已实现的）
 - **磁盘分析**：按文件夹显示占用，找出大文件。
 - **右键菜单管理**：列出资源管理器右键菜单里的各个项目，可以停用或重新启用；系统核心项目会被锁定，不能改。另有"恢复完整（经典）右键菜单"开关，由你手动打开或关闭（政策 10.2.8 要求改变用户的 Windows 体验必须取得用户同意，这个开关是用户主动操作，界面上已写明"卸载本应用不会自动恢复"）。
+- **在右键菜单中添加"分析此文件夹"**：可选开关，由你主动开启。开启后，右键点一个文件夹，或在文件夹空白处右键，就能直接用磁盘分析打开它；如果 PowerTools 已经开着，就用这个窗口，不会再开一个。
 - **卸载工具**：列出已安装的桌面程序、商店应用和 Steam 游戏，运行程序自带的卸载程序；卸载后检查可能的残留，由你勾选后再处理。
   - 残留中的文件夹会移到回收站或隔离区，注册表项会先备份为 `.reg` 文件再删除，可以找回。
   - 清理 `Program Files` 等系统目录的残留时，会弹出 Windows 的管理员确认（UAC），由你决定是否继续。
@@ -87,6 +89,7 @@ PowerTools 是一个 Windows 11 维护工具箱：查看磁盘空间占用、管
 ### 4.3 必须写明的事项
 - "仅支持 Windows 11。"
 - "清理残留和修改右键菜单会改动系统，所有改动都是你点了才发生，并且可以撤销：残留进回收站/隔离区，注册表先备份；右键菜单项可重新启用。"
+- "'分析此文件夹'的右键菜单项写在你的用户注册表里，卸载 PowerTools 不会自动删除；要移除请先在'右键菜单'页关掉这个开关。"
 - "卸载 PowerTools 本身不会自动删除：隔离区（`C:\ProgramData\PowerTools\Quarantine`）、注册表备份（文档文件夹下 `PowerTools\RegistryBackups`），以及你在右键菜单里做过的停用设置。"（政策 10.2.7 要求清楚告知如何干净卸载。**建议在应用里加一个"恢复所有已停用的右键菜单项"入口；我在界面代码里没找到这样的入口，只有单项重新启用和经典菜单开关**）
 - 价格：免费核心 + 一次性付费解锁 Pro（具体功能待定）。
 
@@ -101,7 +104,7 @@ PowerTools is a packaged WinUI 3 desktop app (full trust, medium integrity). It 
 
 How to test:
 1) Disk analyzer: open "Disk analyzer", pick a folder, run a scan.
-2) Context menu: open "Context menu"; entries can be disabled and re-enabled. Core Explorer entries are locked.
+2) Context menu: open "Context menu"; entries can be disabled and re-enabled ("restore all" re-enables everything the user disabled). Core Explorer entries are locked. An optional switch adds "Analyze this folder (PowerTools)" to the Explorer right-click menu of folders and of the empty space inside a folder; it is off by default and turning it off removes it. It starts the app through its execution alias PowerTools.exe (no capability needed).
 3) Uninstaller: open "Uninstaller". Pick any installed desktop program and run its own uninstaller; afterwards the app lists possible leftovers, nothing is removed until the user ticks items and confirms. Folders go to the Recycle Bin (or to C:\ProgramData\PowerTools\Quarantine when administrator rights are needed); registry keys are exported to a .reg backup first.
 
 Administrator rights (UAC): only when the user confirms removal of leftovers under Program Files/ProgramData or HKLM\SOFTWARE, the app starts its bundled PowerTools.ElevatedHelper.exe through the standard Windows UAC prompt. If the user declines, that one action fails and the app continues. The helper accepts only allowlisted locations, moves folders instead of deleting them, and exits after 5 idle minutes. If a program's uninstaller can only be run by administrators, the app asks first and then starts it through an elevated cmd.exe (UAC shows cmd.exe).
