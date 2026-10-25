@@ -26,3 +26,8 @@
 - Task 5：`ResidueRemover` 只处理文件夹，**不做 `.reg` 备份和注册表删除**；`IElevationClient` 只用于 `Program Files`/`ProgramData` 下的文件夹。
 - Task 6：帮手只处理 `folders`，白名单只含文件夹根。
 - Task 7/8：界面里注册表残留灰显、不可勾选，旁注"无法在此删除，请手动处理"。
+
+## 补充验证（Task 7 之后）：文件夹删除不受虚拟化影响
+
+包外建 `%LOCALAPPDATA%\PowerToolsSpikeLocal`、`%APPDATA%\PowerToolsSpikeRoaming`、`C:\ProgramData\PowerToolsSpikeData`（各含一个子目录和文件），从已部署的包里用 `ShellRecycleBin.Delete` 移到回收站：三个都**真的从真实文件系统消失**（包外 `Test-Path` 为 False）。所以文件夹残留的回收站删除在包身份下有效，只有注册表被虚拟化。
+测试产生的三个目录现在在用户的回收站里。
