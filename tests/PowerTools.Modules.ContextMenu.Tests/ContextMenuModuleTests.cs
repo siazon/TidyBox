@@ -96,6 +96,125 @@ public class ContextMenuModuleTests : IDisposable
     }
 
     [Fact]
+    public async Task RestoreAll_TurnsEveryDisabledEntryBackOn_AndLeavesTheEnabledOnesAlone()
+    {
+        _sandbox.AddHandler(Hive.Machine, MenuLocation.AllFiles, "WinRAR", ClsidA);
+        _sandbox.RegisterClsid(Hive.Machine, ClsidA, "WinRAR", RealDll);
+        _sandbox.AddVerb(Hive.Machine, MenuLocation.Directory, "git_shell", ("", "Git Bash Here"));
+        _sandbox.AddVerb(Hive.Machine, MenuLocation.Directory, "other", ("", "Other"));
+        var module = NewModule();
+        var entries = await module.LoadEntriesAsync();
+        module.SetEntryEnabled(entries.Single(e => e.Kind == MenuEntryKind.Handler), false);
+        module.SetEntryEnabled(entries.Single(e => e.KeyName == "git_shell"), false);
+
+        var result = module.RestoreAll(await module.LoadEntriesAsync());
+
+        Assert.Equal(2, result.Restored);
+        Assert.Empty(result.Failures);
+        Assert.True(result.NeedsExplorerRestart); // a handler came back; verbs alone would not need it
+        Assert.All(await module.LoadEntriesAsync(), e => Assert.Equal(MenuEntryState.Enabled, e.State));
+        using var untouched = _sandbox.Roots.User.OpenSubKey(@"Software\Classes\Directory\shell\other");
+        Assert.Null(untouched);
+    }
+
+    [Fact]
+    public async Task RestoreAll_AHandlerListedUnderSeveralLocations_IsRestoredAndCountedOnce()
+    {
+        _sandbox.AddHandler(Hive.Machine, MenuLocation.AllFiles, "Sharing", ClsidA);
+        _sandbox.AddHandler(Hive.Machine, MenuLocation.Directory, "Sharing", ClsidA);
+        _sandbox.RegisterClsid(Hive.Machine, ClsidA, "Sharing", RealDll);
+        var module = NewModule();
+        module.SetEntryEnabled((await module.LoadEntriesAsync()).First(), false);
+
+        var result = module.RestoreAll(await module.LoadEntriesAsync());
+
+        Assert.Equal(1, result.Restored);
+        Assert.All(await module.LoadEntriesAsync(), e => Assert.Equal(MenuEntryState.Enabled, e.State));
+    }
+
+    [Fact]
+    public async Task RestoreAll_OnlyVerbs_DoesNotAskForAnExplorerRestart()
+    {
+        _sandbox.AddVerb(Hive.Machine, MenuLocation.Directory, "git_shell", ("", "Git Bash Here"));
+        var module = NewModule();
+        module.SetEntryEnabled((await module.LoadEntriesAsync()).Single(), false);
+
+        var result = module.RestoreAll(await module.LoadEntriesAsync());
+
+        Assert.Equal(1, result.Restored);
+        Assert.False(result.NeedsExplorerRestart);
+    }
+
+    [Fact]
+    public async Task RestoreAll_AnEntryDisabledBySystem_IsNotOurs_AndIsNotTouched()
+    {
+        _sandbox.AddVerb(Hive.Machine, MenuLocation.Directory, "vendor_tool", ("", "Vendor tool"), ("LegacyDisable", ""));
+        var module = NewModule();
+        var entries = await module.LoadEntriesAsync();
+        Assert.Equal(MenuEntryState.DisabledBySystem, entries.Single().State);
+
+        var result = module.RestoreAll(entries);
+
+        Assert.Equal(0, result.Restored);
+        Assert.Empty(result.Failures);
+        using var key = _sandbox.Roots.User.OpenSubKey(@"Software\Classes\Directory\shell\vendor_tool");
+        Assert.Null(key);
+    }
+
+    [Fact]
+    public async Task RestoreAll_NothingDisabled_RestoresNothing()
+    {
+        _sandbox.AddVerb(Hive.Machine, MenuLocation.Directory, "git_shell", ("", "Git Bash Here"));
+        var module = NewModule();
+
+        var result = module.RestoreAll(await module.LoadEntriesAsync());
+
+        Assert.Equal(0, result.Restored);
+        Assert.False(result.NeedsExplorerRestart);
+    }
+
+    [Fact]
+    public async Task RestoreAll_WhenTheRegistryRefuses_EveryEntryIsListedAsFailed_NotJustTheFirst()
+    {
+        _sandbox.AddVerb(Hive.Machine, MenuLocation.Directory, "git_shell", ("", "Git Bash Here"));
+        _sandbox.AddVerb(Hive.Machine, MenuLocation.Directory, "other", ("", "Other"));
+        var module = NewModule();
+        foreach (var entry in await module.LoadEntriesAsync()) module.SetEntryEnabled(entry, false);
+        var disabled = await module.LoadEntriesAsync();
+        var me = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+        var rule = new System.Security.AccessControl.RegistryAccessRule(me,
+            System.Security.AccessControl.RegistryRights.SetValue, System.Security.AccessControl.AccessControlType.Deny);
+
+        // The deny has to be on the verb keys themselves: a rule on their parent does not reach keys that already exist.
+        var locked = new List<(RegistryKey Key, System.Security.AccessControl.RegistrySecurity Security)>();
+        foreach (var verb in new[] { "git_shell", "other" })
+        {
+            var key = _sandbox.Hive(Hive.User).OpenSubKey($@"Software\Classes\Directory\shell\{verb}", writable: true)!;
+            var security = key.GetAccessControl();
+            security.AddAccessRule(rule);
+            key.SetAccessControl(security);
+            locked.Add((key, security));
+        }
+
+        try
+        {
+            var result = module.RestoreAll(disabled);
+
+            Assert.Equal(0, result.Restored);
+            Assert.Equal(2, result.Failures.Count);
+        }
+        finally
+        {
+            foreach (var (key, security) in locked)
+            {
+                security.RemoveAccessRule(rule);
+                key.SetAccessControl(security);
+                key.Dispose();
+            }
+        }
+    }
+
+    [Fact]
     public async Task SetClassicMenu_TogglesTheSwitch_AndIsClassicMenuEnabledFollows()
     {
         var module = NewModule();
@@ -109,6 +228,36 @@ public class ContextMenuModuleTests : IDisposable
 
         Assert.True(module.SetClassicMenu(false).Success);
         Assert.False(module.IsClassicMenuEnabled);
+    }
+
+    [Fact]
+    public async Task SetAnalyzeMenu_AddsAndRemovesTheFolderVerbs_AndIsAnalyzeMenuEnabledFollows()
+    {
+        var module = new ContextMenuModule(_sandbox.Roots, new PlainNames(), new CountingRestarter(), @"C:\Apps\PowerTools.exe");
+        await module.InitializeAsync();
+        Assert.False(module.IsAnalyzeMenuEnabled);
+
+        var on = module.SetAnalyzeMenu(true);
+        Assert.True(on.Success);
+        Assert.False(on.NeedsExplorerRestart); // static verbs show up at once
+        Assert.True(module.IsAnalyzeMenuEnabled);
+        Assert.Contains(await module.LoadEntriesAsync(), e => e.Id == "Directory|Verb|PowerTools.Analyze");
+
+        Assert.True(module.SetAnalyzeMenu(false).Success);
+        Assert.False(module.IsAnalyzeMenuEnabled);
+    }
+
+    [Fact]
+    public async Task Starting_the_module_points_an_added_analyze_menu_at_the_current_icon()
+    {
+        const string oldIcon = @"C:\Apps\PowerTools_1.0.0.0\Assets\PowerTools.ico";
+        const string newIcon = @"C:\Apps\PowerTools_1.0.1.0\Assets\PowerTools.ico";
+        new ContextMenuModule(_sandbox.Roots, new PlainNames(), new CountingRestarter(), @"C:\Apps\PowerTools.exe", oldIcon).SetAnalyzeMenu(true);
+
+        await new ContextMenuModule(_sandbox.Roots, new PlainNames(), new CountingRestarter(), @"C:\Apps\PowerTools.exe", newIcon).InitializeAsync();
+
+        using var key = _sandbox.Roots.User.OpenSubKey(@"Software\Classes\Directory\shell\PowerTools.Analyze");
+        Assert.Equal(newIcon, key!.GetValue("Icon"));
     }
 
     [Fact]
