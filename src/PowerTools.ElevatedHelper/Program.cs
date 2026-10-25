@@ -14,9 +14,8 @@ if (args.Length == 0)
 var pipeName = args[0];
 var allowedClient = args.Length > 1 ? new SecurityIdentifier(args[1]) : null;
 
-// No real elevated operation handlers exist yet; later module plans register
-// their IElevatedOperationHandler implementations here.
-var handlers = Array.Empty<IElevatedOperationHandler>();
+// Handlers for the operations the modules ask the helper to perform.
+var handlers = new IElevatedOperationHandler[] { new RemoveResidualHandler() };
 
 var server = new ElevationServer(pipeName, handlers, TimeSpan.FromMinutes(5), allowedClient);
 await server.RunAsync(CancellationToken.None);
