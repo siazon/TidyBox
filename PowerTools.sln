@@ -25,7 +25,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerTools.Modules.ContextM
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerTools.Modules.ContextMenu.Tests", "tests\PowerTools.Modules.ContextMenu.Tests\PowerTools.Modules.ContextMenu.Tests.csproj", "{8551BF8B-7D58-4555-8C8A-07D2113B5700}"
 EndProject
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerTools.Modules.Uninstaller", "src\PowerTools.Modules.Uninstaller\PowerTools.Modules.Uninstaller.csproj", "{CD30888A-FF61-4B7E-B565-B8955410BF41}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PowerTools.Modules.Uninstaller.Tests", "tests\PowerTools.Modules.Uninstaller.Tests\PowerTools.Modules.Uninstaller.Tests.csproj", "{34636A42-3A93-44F5-8909-B999105E166C}"
