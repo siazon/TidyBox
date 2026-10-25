@@ -14,4 +14,8 @@ public record InstalledApp(
     string? InstallLocation,
     string? UninstallString,
     string? SteamAppId,
-    string? PackageFullName);
+    string? PackageFullName)
+{
+    /// <summary>The raw DisplayIcon registry value, e.g. "C:\x\y.exe",0 — where the program keeps its icon.</summary>
+    public string? DisplayIcon { get; init; }
+}

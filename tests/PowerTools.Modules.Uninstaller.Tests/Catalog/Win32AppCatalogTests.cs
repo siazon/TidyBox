@@ -73,6 +73,18 @@ public class Win32AppCatalogTests : IDisposable
     }
 
     [Fact]
+    public void Keeps_the_display_icon_value_for_the_icon_lookup()
+    {
+        RegistrySandbox.AddEntry(_sandbox.Machine64, "WithIcon", ("DisplayName", "WithIcon"), ("DisplayIcon", "\"C:\\a\\b.exe\",1"));
+        RegistrySandbox.AddEntry(_sandbox.Machine64, "NoIcon", ("DisplayName", "NoIcon"));
+
+        var apps = _sandbox.Catalog().LoadAll().ToDictionary(a => a.DisplayName);
+
+        Assert.Equal("\"C:\\a\\b.exe\",1", apps["WithIcon"].DisplayIcon);
+        Assert.Null(apps["NoIcon"].DisplayIcon);
+    }
+
+    [Fact]
     public void One_unreadable_value_does_not_fail_the_whole_list()
     {
         // DisplayName stored as a DWORD instead of a string: that entry is skipped, the rest still load.

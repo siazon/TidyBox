@@ -81,7 +81,10 @@ public sealed class Win32AppCatalog : IAppCatalog
                 InstallLocation: Text(key, "InstallLocation"),
                 UninstallString: uninstallString,
                 SteamAppId: steamId,
-                PackageFullName: null);
+                PackageFullName: null)
+            {
+                DisplayIcon = Text(key, "DisplayIcon"),
+            };
         }
         catch (Exception ex) when (IsRegistryFailure(ex))
         {
