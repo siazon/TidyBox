@@ -3,14 +3,17 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
 using PowerTools.Modules.Uninstaller;
 using PowerTools.Modules.Uninstaller.Model;
+using PowerTools.Modules.Uninstaller.Residue;
 using PowerTools.Modules.Uninstaller.Routing;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace PowerTools.App.Views;
 
 public sealed partial class UninstallerView : Page
 {
     private UninstallerModule _module = null!;
-    private IReadOnlyList<InstalledApp> _all = Array.Empty<InstalledApp>();
+    private IReadOnlyList<AppRow> _all = Array.Empty<AppRow>();
+    private CancellationTokenSource? _measuring;
 
     public UninstallerView()
     {
@@ -18,25 +21,7 @@ public sealed partial class UninstallerView : Page
     }
 
     // Used from the row template (x:Bind functions).
-    public static string Subtitle(string? publisher, string? version)
-        => string.Join(" · ", new[] { publisher, version }.Where(part => !string.IsNullOrWhiteSpace(part)));
-
-    public static string SourceText(AppSource source) => source switch
-    {
-        AppSource.Store => "商店应用",
-        AppSource.Steam => "Steam 游戏",
-        _ => "桌面程序",
-    };
-
-    public static string SizeText(long? bytes) => bytes switch
-    {
-        null => "",
-        >= 1L << 30 => $"{bytes.Value / (double)(1L << 30):0.0} GB",
-        >= 1L << 20 => $"{bytes.Value / (double)(1L << 20):0.#} MB",
-        _ => $"{Math.Max(1, bytes.Value >> 10)} KB",
-    };
-
-    public static string DateText(DateTime? date) => date?.ToString("yyyy-MM-dd") ?? "";
+    public static Visibility Show(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
@@ -44,13 +29,18 @@ public sealed partial class UninstallerView : Page
         _ = LoadAsync();
     }
 
+    protected override void OnNavigatedFrom(NavigationEventArgs e) => _measuring?.Cancel();
+
     private async Task LoadAsync()
     {
+        _measuring?.Cancel();
         StatusText.Text = "正在读取已安装的程序…";
         try
         {
-            _all = await _module.LoadAppsAsync();
+            var apps = await _module.LoadAppsAsync();
+            _all = await Task.Run(() => apps.Select(app => new AppRow(app)).ToList());
             ApplyFilter();
+            _ = MeasureMissingSizesAsync();
         }
         catch (Exception ex)
         {
@@ -58,45 +48,126 @@ public sealed partial class UninstallerView : Page
         }
     }
 
+    // The registry often has no size for a program; measure its folder in the background so the column (and sorting by size) is useful.
+    private async Task MeasureMissingSizesAsync()
+    {
+        var cts = _measuring = new CancellationTokenSource();
+        var pending = _all.Where(row => row.SizeBytes is null && row.App.Source != AppSource.Store).ToList();
+        foreach (var row in pending) row.Measuring = true;
+
+        using var gate = new SemaphoreSlim(3);
+        try
+        {
+            await Task.WhenAll(pending.Select(async row =>
+            {
+                await gate.WaitAsync(cts.Token);
+                try
+                {
+                    row.SizeBytes = await _module.MeasureSizeAsync(row.App, cts.Token);
+                }
+                finally
+                {
+                    row.Measuring = false;
+                    gate.Release();
+                }
+            }));
+
+            if (SortKey == "size") ApplyFilter();
+        }
+        catch (OperationCanceledException)
+        {
+            // Leaving the page or refreshing: the rows that were not reached just stay without a size.
+            foreach (var row in pending) row.Measuring = false;
+        }
+    }
+
+    private string? SortKey => (SortBox.SelectedItem as ComboBoxItem)?.Tag as string;
+
     private void ApplyFilter()
     {
         var query = SearchBox.Text.Trim();
         var source = (SourceFilter.SelectedItem as ComboBoxItem)?.Tag as string;
+        var selected = AppList.SelectedItem as AppRow;
 
-        var shown = _all.Where(app =>
-            (source is null || app.Source.ToString() == source)
+        IEnumerable<AppRow> shown = _all.Where(row =>
+            (source is null || row.App.Source.ToString() == source)
             && (query.Length == 0
-                || app.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase)
-                || (app.Publisher?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false))).ToList();
+                || row.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || (row.App.Publisher?.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)));
 
-        AppList.ItemsSource = shown;
-        StatusText.Text = shown.Count == _all.Count ? $"共 {_all.Count} 项" : $"共 {_all.Count} 项，当前显示 {shown.Count} 项";
+        shown = SortKey switch
+        {
+            "size" => shown.OrderByDescending(row => row.SizeBytes ?? -1),
+            "date" => shown.OrderByDescending(row => row.App.InstalledOn ?? DateTime.MinValue),
+            _ => shown.OrderBy(row => row.DisplayName, StringComparer.OrdinalIgnoreCase),
+        };
+
+        var list = shown.ToList();
+        AppList.ItemsSource = list;
+        if (selected is not null && list.Contains(selected)) AppList.SelectedItem = selected;
+        StatusText.Text = list.Count == _all.Count ? $"共 {_all.Count} 项" : $"共 {_all.Count} 项，当前显示 {list.Count} 项";
     }
 
     private void OnFilterChanged(object sender, object e)
     {
-        // The combo box raises this while the page is still being built.
-        if (AppList is null || !IsLoaded && _all.Count == 0) return;
+        // The combo boxes raise this while the page is still being built.
+        if (AppList is null || SortBox is null || SourceFilter is null) return;
         ApplyFilter();
     }
 
-    private void OnSelectionChanged(object sender, SelectionChangedEventArgs e) => UninstallButton.IsEnabled = AppList.SelectedItem is InstalledApp;
+    private void OnSelectionChanged(object sender, SelectionChangedEventArgs e) => UninstallButton.IsEnabled = AppList.SelectedItem is AppRow;
 
     private void OnRefreshClick(object sender, RoutedEventArgs e) => _ = LoadAsync();
 
+    private void OnDragOver(object sender, DragEventArgs e)
+    {
+        if (e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            e.AcceptedOperation = DataPackageOperation.Link;
+            e.DragUIOverride.Caption = "找到这个文件对应的软件";
+        }
+    }
+
+    // A shortcut or program file dropped here is traced back to the installed program it belongs to, so a program
+    // you cannot name (a pop-up, a tray icon) can still be found and uninstalled.
+    private async void OnDrop(object sender, DragEventArgs e)
+    {
+        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+
+        var items = await e.DataView.GetStorageItemsAsync();
+        var path = items.FirstOrDefault()?.Path;
+        if (string.IsNullOrEmpty(path)) return;
+
+        var found = _module.FindAppByPath(_all.Select(row => row.App), path);
+        var row = found is null ? null : _all.FirstOrDefault(r => r.App == found);
+        if (row is null)
+        {
+            StatusText.Text = $"没有找到“{System.IO.Path.GetFileName(path)}”对应的已安装程序。";
+            return;
+        }
+
+        SearchBox.Text = "";
+        SourceFilter.SelectedIndex = 0;
+        ApplyFilter();
+        AppList.SelectedItem = row;
+        AppList.ScrollIntoView(row);
+        StatusText.Text = $"已定位到“{row.DisplayName}”。";
+    }
+
     private async void OnUninstallClick(object sender, RoutedEventArgs e)
     {
-        if (AppList.SelectedItem is not InstalledApp app) return;
+        if (AppList.SelectedItem is not AppRow selected) return;
+        var app = selected.App;
 
         var confirm = new ContentDialog
         {
             Title = $"卸载“{app.DisplayName}”？",
-            Content = app.Source switch
+            Content = (app.Source switch
             {
                 AppSource.Steam => "会打开 Steam 的卸载确认窗口。",
                 AppSource.Store => "这个商店应用会被卸载，之后可以在 Microsoft Store 重新安装。",
                 _ => "会运行这个程序自带的卸载程序，完成后检查是否有残留。",
-            },
+            }) + (selected.Health is null ? "" : $"\n\n⚠ {selected.Health}，卸载可能无法完成。"),
             PrimaryButtonText = "卸载",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Close,
@@ -128,11 +199,11 @@ public sealed partial class UninstallerView : Page
         finally
         {
             RefreshButton.IsEnabled = true;
-            UninstallButton.IsEnabled = AppList.SelectedItem is InstalledApp;
+            UninstallButton.IsEnabled = AppList.SelectedItem is AppRow;
         }
     }
 
-    private void ShowResidue(InstalledApp app, IReadOnlyList<PowerTools.Modules.Uninstaller.Residue.ResidueItem> leftovers)
+    private void ShowResidue(InstalledApp app, IReadOnlyList<ResidueItem> leftovers)
     {
         ResidueTitle.Text = $"“{app.DisplayName}”卸载后可能还留下 {leftovers.Count} 项，请检查后再决定是否删除";
         ResidueList.ItemsSource = leftovers.Select(item => new ResidueRow(item)).ToList();

@@ -87,6 +87,14 @@ public sealed class UninstallerModule : IToolModule
         return new UninstallResult(outcome, leftovers);
     }
 
+    /// <summary>Real size of the program's folder, for entries whose registry record has no size; null when the folder is unknown.</summary>
+    public Task<long?> MeasureSizeAsync(InstalledApp app, CancellationToken ct = default)
+        => Task.Run(() => AppFolder.Resolve(app) is { } folder ? FolderSizer.Measure(folder, ct) : null, ct);
+
+    /// <summary>The installed program a dropped file, shortcut or folder belongs to.</summary>
+    public InstalledApp? FindAppByPath(IEnumerable<InstalledApp> apps, string path)
+        => ShortcutResolver.Resolve(path) is { } target ? AppMatcher.Find(apps, target) : null;
+
     public Task<IReadOnlyList<RemovalResult>> RemoveResidueAsync(IReadOnlyList<ResidueItem> items, CancellationToken ct = default)
         => _remover.RemoveAsync(items, ct);
 }

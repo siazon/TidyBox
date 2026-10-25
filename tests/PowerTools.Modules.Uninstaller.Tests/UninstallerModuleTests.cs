@@ -145,6 +145,34 @@ public sealed class UninstallerModuleTests : IDisposable
     }
 
     [Fact]
+    public async Task MeasureSize_sums_the_install_folder_and_is_null_without_one()
+    {
+        var install = Directory.CreateDirectory(Path.Combine(_appData, "Sized")).FullName;
+        File.WriteAllBytes(Path.Combine(install, "a.bin"), new byte[1234]);
+
+        Assert.Equal(1234, await Module().MeasureSizeAsync(App("Sized", installLocation: install)));
+        Assert.Null(await Module().MeasureSizeAsync(App("NoFolder")));
+    }
+
+    [Fact]
+    public void FindAppByPath_follows_shortcuts_to_the_program_they_start()
+    {
+        var install = Directory.CreateDirectory(Path.Combine(_appData, "Dropped")).FullName;
+        var exe = Path.Combine(install, "dropped.exe");
+        File.WriteAllText(exe, "");
+        var link = Path.Combine(_appData, "Dropped.lnk");
+        dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell")!)!;
+        dynamic shortcut = shell.CreateShortcut(link);
+        shortcut.TargetPath = exe;
+        shortcut.Save();
+        var apps = new[] { App("Dropped", installLocation: install), App("Other") };
+
+        Assert.Equal("Dropped", Module().FindAppByPath(apps, link)?.DisplayName);
+        Assert.Equal("Dropped", Module().FindAppByPath(apps, exe)?.DisplayName);
+        Assert.Null(Module().FindAppByPath(apps, Path.Combine(_appData, "nothing.exe")));
+    }
+
+    [Fact]
     public async Task RemoveResidue_goes_through_the_remover()
     {
         var folder = Directory.CreateDirectory(Path.Combine(_appData, "Left")).FullName;
