@@ -33,7 +33,7 @@
 
   <ItemGroup>
     <!-- PNG assets are picked up by default; SVG is not. -->
-    <Content Include="Assets\microsoft-store.svg" />
+    <Content Include="Assets\app-placeholder.svg" />
   </ItemGroup>
 
   <ItemGroup>
