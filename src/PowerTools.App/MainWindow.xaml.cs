@@ -11,6 +11,7 @@ public sealed partial class MainWindow : Window
     private static readonly Dictionary<string, Type> Pages = new()
     {
         ["disk-analyzer"] = typeof(DiskAnalyzerView),
+        ["context-menu"] = typeof(ContextMenuView),
     };
 
     private readonly ModuleRegistry _registry;
