@@ -54,7 +54,8 @@ public sealed class ResidueRoots
 
         var elevated = new[]
         {
-            Folder(Environment.SpecialFolder.ProgramFiles),
+            // A 32-bit process is told that "Program Files" is the x86 folder; ProgramW6432 always names the native one.
+            Environment.GetEnvironmentVariable("ProgramW6432") ?? Folder(Environment.SpecialFolder.ProgramFiles),
             Folder(Environment.SpecialFolder.ProgramFilesX86),
             Folder(Environment.SpecialFolder.CommonApplicationData),
         };
