@@ -24,7 +24,7 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Spacing="2" VerticalAlignment="Center">
                     <TextBlock Text="恢复完整（经典）右键菜单" FontWeight="SemiBold" />
-                    <TextBlock Text="开启后，右键直接显示完整菜单，不用再点“显示更多选项”。更改需要重启资源管理器后才会生效。"
+                    <TextBlock Text="开启后，右键直接显示完整菜单，不用再点“显示更多选项”。更改需要重启资源管理器后才会生效。这里的设置保存在 Windows 注册表中，卸载本应用不会自动恢复。"
                                TextWrapping="Wrap" Opacity="0.7" />
                 </StackPanel>
                 <ToggleSwitch x:Name="ClassicSwitch" Grid.Column="1" OnContent="已开启" OffContent="已关闭" Toggled="OnClassicToggled"

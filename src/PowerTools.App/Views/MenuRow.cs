@@ -33,26 +33,32 @@ public sealed class MenuRow : INotifyPropertyChanged
     /// <summary>The switch position: on means the entry shows up in the menu.</summary>
     public bool IsOn => _entry?.State == MenuEntryState.Enabled;
 
-    public bool CanToggle => _entry is { State: not MenuEntryState.DisabledBySystem } e && !(e.Kind == MenuEntryKind.Handler && e.Clsid is null);
+    public bool CanToggle => _entry is { LockedReason: null };
 
     public string KindText => _entry?.Kind == MenuEntryKind.Handler ? "扩展" : "命令";
 
+    /// <summary>Why the entry is read-only, else what it is and any caveat — all visible, not only in a tooltip.</summary>
     public string Detail
     {
         get
         {
             if (_entry is null) return "";
-            if (_entry.Problem is not null) return _entry.Problem;
-            if (_entry.Kind == MenuEntryKind.Verb) return $"命令名：{_entry.KeyName.Trim()}";
-            return string.Join(" · ", new[] { _entry.Publisher, _entry.ModulePath }.Where(part => !string.IsNullOrWhiteSpace(part)));
+
+            var what = _entry.LockedReason
+                ?? _entry.Problem
+                ?? (_entry.Kind == MenuEntryKind.Verb
+                    ? $"命令名：{_entry.KeyName.Trim()}"
+                    : string.Join(" · ", new[] { _entry.Publisher, _entry.ModulePath }.Where(part => !string.IsNullOrWhiteSpace(part))));
+
+            return _entry.Warning is null ? what : $"{what}　⚠ {_entry.Warning}";
         }
     }
 
     public string ToggleTooltip => _entry switch
     {
         null => "",
-        { State: MenuEntryState.DisabledBySystem } => "系统已在机器级别禁用此项，无法在这里更改",
-        { Kind: MenuEntryKind.Handler, Clsid: null } => _entry.Problem ?? "无法识别此项，不能更改",
+        { LockedReason: { } reason } => reason,
+        { Warning: { } warning } => warning,
         _ => IsOn ? "关闭后，右键菜单里不再显示此项" : "打开后，右键菜单里重新显示此项",
     };
 
