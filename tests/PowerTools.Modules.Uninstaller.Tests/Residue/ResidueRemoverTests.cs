@@ -78,6 +78,19 @@ public sealed class ResidueRemoverTests : IDisposable
     }
 
     [Fact]
+    public async Task A_folder_that_is_already_gone_counts_as_done_and_is_not_sent_to_the_helper()
+    {
+        var gone = Path.Combine(_programFiles, "AlreadyGone");
+
+        var result = Assert.Single(await Remover().RemoveAsync(new[] { Item(gone, elevated: true) }));
+
+        Assert.True(result.Success);
+        Assert.True(result.AlreadyGone);
+        Assert.Empty(_elevation.Requests);
+        Assert.Empty(_bin.Deleted);
+    }
+
+    [Fact]
     public async Task One_failing_item_does_not_stop_the_others()
     {
         var locked = Folder(_appData, "Locked");
@@ -89,10 +102,10 @@ public sealed class ResidueRemoverTests : IDisposable
 
         var results = await Remover().RemoveAsync(new[] { Item(locked), Item(denied), Item(gone), Item(ok) });
 
-        Assert.Equal(new[] { false, false, false, true }, results.Select(r => r.Success));
+        Assert.Equal(new[] { false, false, true, true }, results.Select(r => r.Success));
         Assert.Contains("in use", results[0].Error);
         Assert.Contains("denied", results[1].Error);
-        Assert.Contains("不存在", results[2].Error);
+        Assert.True(results[2].AlreadyGone); // the uninstaller itself got rid of it in the meantime: nothing left to do, not a failure
         Assert.Equal(new[] { locked, denied, gone, ok }, results.Select(r => r.Item.Path));
     }
 

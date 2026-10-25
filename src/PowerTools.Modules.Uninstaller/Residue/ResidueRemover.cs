@@ -4,7 +4,8 @@ using PowerTools.Core.Elevation;
 
 namespace PowerTools.Modules.Uninstaller.Residue;
 
-public record RemovalResult(ResidueItem Item, bool Success, string? Error);
+/// <param name="AlreadyGone">The item was no longer there when its turn came (typically the uninstaller itself finished the cleanup); nothing was done and nothing is left to do.</param>
+public record RemovalResult(ResidueItem Item, bool Success, string? Error, bool AlreadyGone = false);
 
 /// <summary>
 /// Removes leftovers recoverably. Folders go to the Recycle Bin; registry keys are first exported to a .reg file
@@ -51,6 +52,11 @@ public sealed class ResidueRemover
             {
                 results[i] = Fail(item, problem);
             }
+            else if (IsGone(item))
+            {
+                // Some uninstallers keep cleaning up after they report "done"; what is already gone needs no work (and no UAC prompt).
+                results[i] = new RemovalResult(item, true, null, AlreadyGone: true);
+            }
             else if (item.NeedsElevation)
             {
                 elevated.Add(i);
@@ -76,12 +82,14 @@ public sealed class ResidueRemover
 
         if (item.Kind == ResidueKind.Folder)
         {
-            if (_roots.IsProtectedFolder(item.Path)) return "这是受保护的位置，不会被删除。";
-            return Directory.Exists(item.Path) ? null : "路径已不存在。";
+            return _roots.IsProtectedFolder(item.Path) ? "这是受保护的位置，不会被删除。" : null;
         }
 
         return _roots.IsRemovableRegistryKey(item.Path) ? null : "这是受保护的注册表位置，不会被删除。";
     }
+
+    private bool IsGone(ResidueItem item)
+        => item.Kind == ResidueKind.Folder ? !Directory.Exists(item.Path) : !_roots.RegistryKeyExists(item.Path);
 
     private RemovalResult MoveToRecycleBin(ResidueItem item)
     {

@@ -251,6 +251,7 @@ public sealed partial class UninstallerView : Page
     {
         ResidueTitle.Text = $"“{app.DisplayName}”卸载后可能还留下 {leftovers.Count} 项，请检查后再决定是否删除";
         ResidueList.ItemsSource = leftovers.Select(item => new ResidueRow(item)).ToList();
+        ResidueResult.Visibility = Visibility.Collapsed;
         ResiduePanel.Visibility = Visibility.Visible;
     }
 
@@ -275,12 +276,20 @@ public sealed partial class UninstallerView : Page
             ResidueList.ItemsSource = remaining;
             if (remaining.Count == 0) ResiduePanel.Visibility = Visibility.Collapsed;
 
-            var restore = results.Any(r => r.Success && r.Item.Kind == ResidueKind.RegistryKey)
-                ? $"注册表备份在 {_module.RegistryBackupDirectory}（需要管理员权限的备份在 Quarantine 目录里）。"
-                : "";
-            StatusText.Text = failed.Count == 0
-                ? $"已移除 {results.Count} 项，文件夹可在回收站或 Quarantine 目录中找回。{restore}"
-                : $"已移除 {results.Count - failed.Count} 项，{failed.Count} 项失败：{failed[0].Item.Path} —— {failed[0].Error} {restore}";
+            var removed = results.Count(r => r.Success && !r.AlreadyGone);
+            var gone = results.Count(r => r.AlreadyGone);
+            var parts = new List<string>();
+            if (removed > 0) parts.Add($"已移除 {removed} 项，文件夹可在回收站或 Quarantine 目录中找回");
+            if (gone > 0) parts.Add($"{gone} 项已经不在了（卸载程序自己清理掉了）");
+            if (failed.Count > 0) parts.Add($"{failed.Count} 项失败：{failed[0].Item.Path} —— {failed[0].Error}");
+            if (results.Any(r => r.Success && !r.AlreadyGone && r.Item.Kind == ResidueKind.RegistryKey))
+            {
+                parts.Add($"注册表备份在 {_module.RegistryBackupDirectory}（需要管理员权限的备份在 Quarantine 目录里）");
+            }
+
+            // Shown in the panel as well as in the status line at the top, which is out of sight when the list is long.
+            StatusText.Text = ResidueResult.Text = string.Join("；", parts) + "。";
+            ResidueResult.Visibility = Visibility.Visible;
         }
         catch (Exception ex)
         {

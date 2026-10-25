@@ -65,6 +65,31 @@ public sealed class ResidueRoots
         return false;
     }
 
+    /// <summary>Whether the key is still there, as far as can be told; when it cannot be read it counts as there, so the tool gets to decide.</summary>
+    public bool RegistryKeyExists(string path)
+    {
+        foreach (var root in RegistryRoots)
+        {
+            var prefix = $@"{root.Hive}\";
+            if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+
+            var relative = path.Substring(prefix.Length);
+            if (!relative.StartsWith(root.Path + "\\", StringComparison.OrdinalIgnoreCase)) continue;
+
+            try
+            {
+                using var key = root.Key.OpenSubKey(relative);
+                return key is not null;
+            }
+            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException or ObjectDisposedException)
+            {
+                return true;
+            }
+        }
+
+        return true;
+    }
+
     internal static string FullPath(string path) => Path.GetFullPath(path).TrimEnd('\\');
 
     internal static bool IsUnder(string path, string root) => path.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase);

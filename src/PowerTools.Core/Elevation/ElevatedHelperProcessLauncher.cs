@@ -29,6 +29,8 @@ public class ElevatedHelperProcessLauncher : IHelperProcessLauncher
             Arguments = $"{pipeName} {WindowsIdentity.GetCurrent().User!.Value}",
             UseShellExecute = true,
             Verb = "runas",
+            // The helper is a console program with nothing to show; without this a black window stays open while it runs.
+            WindowStyle = ProcessWindowStyle.Hidden,
         });
     }
 }

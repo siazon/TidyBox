@@ -61,12 +61,29 @@ public sealed class ResidueRemoverRegistryTests : IDisposable
             new[]
             {
                 new RegistryRoot("HKCU", Registry.CurrentUser, SandboxSoftware, NeedsElevation: false),
-                new RegistryRoot("HKLM", Registry.LocalMachine, "SOFTWARE", NeedsElevation: true),
+                new RegistryRoot("HKLM", Registry.CurrentUser, MachineSandbox, NeedsElevation: true),
             }),
         tool ?? _tool,
         _backups);
 
-    private string Key(string relative) => $@"HKCU\{SandboxSoftware}\{relative}";
+    // HKLM is stood in for by another piece of HKCU, so nothing real is read or changed in the machine hive.
+    private string MachineSandbox => $@"Software\PowerToolsTests\{_guid}\Machine";
+
+    // Creates the key for real: a key that does not exist is "already gone" and is never exported or deleted.
+    private string Key(string relative)
+    {
+        using var created = Registry.CurrentUser.CreateSubKey($@"{SandboxSoftware}\{relative}");
+        return $@"HKCU\{SandboxSoftware}\{relative}";
+    }
+
+    // A path as the scanner would write it, without creating anything.
+    private string Raw(string relative) => $@"HKCU\{SandboxSoftware}\{relative}";
+
+    private string MachineKey(string relative)
+    {
+        using var created = Registry.CurrentUser.CreateSubKey($@"{MachineSandbox}\{relative}");
+        return $@"HKLM\{MachineSandbox}\{relative}";
+    }
 
     private static ResidueItem Item(string path, bool elevated = false)
         => new(ResidueKind.RegistryKey, path, ResidueConfidence.Medium, "test", elevated, Removable: true);
@@ -143,8 +160,8 @@ public sealed class ResidueRemoverRegistryTests : IDisposable
             Item(Key("Classes")),
             Item(Key("Microsoft\\Foo")),
             Item(Key("A\\B\\C")),
-            Item(Key("Foo\\..\\..")),
-            Item(Key("")),
+            Item(Raw("Foo\\..\\..")),
+            Item(Raw("")),
         };
 
         var results = await Remover().RemoveAsync(items);
@@ -156,8 +173,8 @@ public sealed class ResidueRemoverRegistryTests : IDisposable
     [Fact]
     public async Task Machine_keys_go_to_the_helper_together_and_are_not_touched_locally()
     {
-        var a = @"HKLM\SOFTWARE\Foo";
-        var b = @"HKLM\SOFTWARE\Vendor\Foo";
+        var a = MachineKey("Foo");
+        var b = MachineKey(@"Vendor\Foo");
         _elevation.Respond = _ => new ElevationResponse(false, "partly", JsonSerializer.Serialize(new object[]
         {
             new { path = a, success = true, error = (string?)null },
@@ -203,11 +220,23 @@ public sealed class ResidueRemoverRegistryTests : IDisposable
     }
 
     [Fact]
-    public async Task A_key_that_no_longer_exists_is_reported_not_thrown()
+    public async Task A_key_that_is_already_gone_counts_as_done_without_any_backup_or_helper_call()
     {
-        var result = Assert.Single(await Remover(new ProcessRegTool()).RemoveAsync(new[] { Item(Key("NeverCreated")) }));
+        var result = Assert.Single(await Remover().RemoveAsync(new[] { Item(Raw("NeverCreated")) }));
 
-        Assert.False(result.Success);
-        Assert.Empty(Directory.Exists(_backups) ? Directory.GetFiles(_backups, "*.reg") : Array.Empty<string>());
+        Assert.True(result.Success);
+        Assert.True(result.AlreadyGone);
+        Assert.Empty(_tool.Calls);
+        Assert.Empty(_elevation.Requests);
+    }
+
+    [Fact]
+    public async Task A_machine_key_that_is_already_gone_is_not_sent_to_the_helper()
+    {
+        var result = Assert.Single(await Remover().RemoveAsync(new[] { Item($@"HKLM\{MachineSandbox}\NeverCreated", elevated: true) }));
+
+        Assert.True(result.Success);
+        Assert.True(result.AlreadyGone);
+        Assert.Empty(_elevation.Requests);
     }
 }
