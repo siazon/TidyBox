@@ -169,7 +169,7 @@ public sealed class ResidueScanner
     }
 
     // Too short, a word like "Setup", or something Windows owns: not enough to say a folder belongs to this app.
-    private static bool Eligible(string normalized)
+    internal static bool Eligible(string normalized)
         => (normalized.Length > 3 || normalized.Any(c => c >= 0x4E00))
            && !GenericNames.Contains(normalized)
            && !ResidueRoots.ProtectedNames.Contains(normalized);
