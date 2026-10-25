@@ -135,7 +135,7 @@
   - 枚举 `HKEY_CLASSES_ROOT\*\shellex\ContextMenuHandlers`、
     `Directory\Background\shellex\ContextMenuHandlers` 等注册表路径
   - CLSID 转友好名称（查 `InprocServer32` 指向的DLL路径再读文件描述信息）
-  - 禁用操作用"重命名/移动备份"而非删除，提供恢复按钮
+  - 禁用操作只增删我们自己写的值而不删除任何键（2026-10-25 更新，经真实 Explorer 验证，见 `2026-10-25-context-menu-mechanism-spike.md`）：处理程序用当前用户的 `Shell Extensions\Blocked` 列表，静态动词用 `HKCU` 里的 `LegacyDisable` 值；删掉这些值即可恢复，不需要管理员权限。原先设想的"重命名/移动备份"留作需要提权时的回退方案
   - 附带一键"强制显示完整/经典右键菜单"的快捷开关（修改
     `HKCU\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32`）
 - **卸载工具模块**：

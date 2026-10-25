@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using PowerTools.Core.Modules;
+using PowerTools.Modules.ContextMenu;
 using PowerTools.Modules.DiskAnalyzer;
 
 namespace PowerTools.App;
@@ -17,6 +18,7 @@ public partial class App : Application
     {
         InitializeComponent();
         Modules.Register(new DiskAnalyzerModule());
+        Modules.Register(new ContextMenuModule());
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
