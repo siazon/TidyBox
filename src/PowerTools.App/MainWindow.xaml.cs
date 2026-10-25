@@ -1,3 +1,4 @@
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using PowerTools.App.Views;
@@ -21,10 +22,37 @@ public sealed partial class MainWindow : Window
     {
         _registry = registry;
         InitializeComponent();
+
+        // The icon at the top left of the window (and on its taskbar button).
+        var icon = Path.Combine(AppContext.BaseDirectory, "Assets", "PowerTools.ico");
+        if (File.Exists(icon)) AppWindow.SetIcon(icon);
         ContentFrame.Content = new TextBlock { Margin = new Thickness(24), Text = "No modules loaded." };
         Nav.SelectionChanged += OnSelectionChanged;
         Nav.Loaded += async (_, _) => await LoadModulesAsync();
     }
+
+    /// <summary>Shows the folder in the disk analyzer and starts scanning it; used when the right-click menu asks the open window to.</summary>
+    public void OpenInDiskAnalyzer(string path)
+    {
+        var item = Nav.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(i => i.IsEnabled && i.Tag as string == "disk-analyzer");
+        if (item is null) return;
+
+        App.SetPendingAnalyzePath(path);
+        if (ContentFrame.Content is DiskAnalyzerView view) view.ScanPendingPath(); // already there: navigating again would do nothing
+        else Nav.SelectedItem = item;
+
+        BringToFront();
+    }
+
+    private void BringToFront()
+    {
+        if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter) presenter.Restore();
+        Activate();
+        SetForegroundWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr window);
 
     private bool _modulesLoaded;
 
@@ -52,6 +80,12 @@ public sealed partial class MainWindow : Window
                 ToolTipService.SetToolTip(failed, ex.Message);
                 Nav.MenuItems.Add(failed);
             }
+        }
+
+        // Started from the right-click menu: the folder goes to the disk analyzer.
+        if (App.HasPendingAnalyzePath)
+        {
+            Nav.SelectedItem = Nav.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(item => item.IsEnabled && item.Tag as string == "disk-analyzer");
         }
 
         // Otherwise the user lands on the "No modules loaded." placeholder although modules did load.

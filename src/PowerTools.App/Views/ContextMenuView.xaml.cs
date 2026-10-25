@@ -26,6 +26,7 @@ public sealed partial class ContextMenuView : Page
     {
         _module = (ContextMenuModule)e.Parameter;
         SetClassicSwitch(_module.IsClassicMenuEnabled);
+        SetAnalyzeSwitch(_module.IsAnalyzeMenuEnabled);
         _ = LoadAsync();
     }
 
@@ -98,6 +99,45 @@ public sealed partial class ContextMenuView : Page
             ? string.Equals(a.Clsid, b.Clsid, StringComparison.OrdinalIgnoreCase)
             : a.Id == b.Id;
 
+    private async void OnRestoreAllClick(object sender, RoutedEventArgs e)
+    {
+        var entries = _entryRows.Select(row => row.Entry!).ToList();
+        var count = entries.Count(entry => entry.State == MenuEntryState.Disabled && entry.LockedReason is null);
+        if (count == 0)
+        {
+            StatusText.Text = "没有已停用的项目需要恢复。";
+            return;
+        }
+
+        var confirm = new ContentDialog
+        {
+            Title = "重新启用所有已停用的项目？",
+            Content = $"共 {count} 个已停用的条目会重新显示在右键菜单里。系统级禁用的项和被锁定的核心项不会改动。",
+            PrimaryButtonText = "全部恢复",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+
+        RestoreAllButton.IsEnabled = false;
+        try
+        {
+            var result = _module.RestoreAll(entries);
+            await LoadAsync();
+
+            // Loading rewrites the status line, so the outcome is written after it.
+            StatusText.Text = result.Failures.Count == 0
+                ? $"已恢复 {result.Restored} 项。"
+                : $"已恢复 {result.Restored} 项，{result.Failures.Count} 项失败：{string.Join("；", result.Failures)}";
+            if (result.NeedsExplorerRestart) RestartHint.IsOpen = true;
+        }
+        finally
+        {
+            RestoreAllButton.IsEnabled = true;
+        }
+    }
+
     private bool _settingClassicSwitch;
 
     private void SetClassicSwitch(bool on)
@@ -120,6 +160,31 @@ public sealed partial class ContextMenuView : Page
         }
 
         if (result.NeedsExplorerRestart) RestartHint.IsOpen = true;
+    }
+
+    private bool _settingAnalyzeSwitch;
+
+    private void SetAnalyzeSwitch(bool on)
+    {
+        _settingAnalyzeSwitch = true;
+        AnalyzeSwitch.IsOn = on;
+        _settingAnalyzeSwitch = false;
+    }
+
+    private async void OnAnalyzeToggled(object sender, RoutedEventArgs e)
+    {
+        if (_settingAnalyzeSwitch) return;
+
+        var result = _module.SetAnalyzeMenu(AnalyzeSwitch.IsOn);
+        if (!result.Success)
+        {
+            StatusText.Text = $"无法更改“分析此文件夹”菜单：{result.Error}";
+            SetAnalyzeSwitch(_module.IsAnalyzeMenuEnabled);
+            return;
+        }
+
+        // The entries are verbs like any other, so they appear in (or leave) the list below.
+        await LoadAsync();
     }
 
     private async void OnRestartClick(object sender, RoutedEventArgs e)

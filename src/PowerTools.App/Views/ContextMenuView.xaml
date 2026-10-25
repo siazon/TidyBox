@@ -13,7 +13,8 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Padding="16,12" CornerRadius="6" BorderThickness="1"
+        <StackPanel Grid.Row="0" Spacing="8">
+        <Border Padding="16,12" CornerRadius="6" BorderThickness="1"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
             <Grid ColumnSpacing="12">
@@ -33,10 +34,37 @@
             </Grid>
         </Border>
 
+        <Border Padding="16,12" CornerRadius="6" BorderThickness="1"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="在右键菜单中添加“分析此文件夹”" FontWeight="SemiBold" />
+                    <TextBlock Text="开启后，右键点一个文件夹，或在文件夹空白处右键，都会出现“分析此文件夹（PowerTools）”，并用磁盘空间分析打开它。立即生效，不需要重启资源管理器。这里的设置保存在 Windows 注册表中，卸载本应用不会自动删除；要移除请先在这里关闭。"
+                               TextWrapping="Wrap" Opacity="0.7" />
+                </StackPanel>
+                <ToggleSwitch x:Name="AnalyzeSwitch" Grid.Column="1" OnContent="已开启" OffContent="已关闭" Toggled="OnAnalyzeToggled"
+                              AutomationProperties.Name="在右键菜单中添加分析此文件夹" />
+            </Grid>
+        </Border>
+        </StackPanel>
+
         <InfoBar x:Name="RestartHint" Grid.Row="1" IsOpen="False" Severity="Informational" Title="需要重启资源管理器"
                  Message="扩展类的菜单项和经典菜单开关，要重启资源管理器后才会生效；命令类的菜单项立即生效。" />
 
-        <TextBox x:Name="SearchBox" Grid.Row="2" PlaceholderText="搜索名称、发布者、路径…" TextChanged="OnSearchChanged" />
+        <Grid Grid.Row="2" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox x:Name="SearchBox" PlaceholderText="搜索名称、发布者、路径…" TextChanged="OnSearchChanged" />
+            <Button x:Name="RestoreAllButton" Grid.Column="1" Content="恢复全部已停用的项" Click="OnRestoreAllClick"
+                    ToolTipService.ToolTip="把所有已停用的右键菜单项重新启用" />
+        </Grid>
 
         <TextBlock x:Name="StatusText" Grid.Row="3" TextWrapping="Wrap" Text="正在读取右键菜单…" />
 

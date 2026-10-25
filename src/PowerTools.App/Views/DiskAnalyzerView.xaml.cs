@@ -25,10 +25,72 @@ public sealed partial class DiskAnalyzerView : Page
     private DiskAnalyzerModule _module = null!;
     private DiskTreeModel? _tree;
 
+    private readonly MenuFlyout _rowMenu = new();
+    private DiskTreeRow? _menuRow;
+
     public DiskAnalyzerView()
     {
         InitializeComponent();
         UpdateHeaders();
+        BuildRowMenu();
+    }
+
+    private void BuildRowMenu()
+    {
+        void Add(string text, Action<DiskTreeRow> action)
+        {
+            var item = new MenuFlyoutItem { Text = text };
+            item.Click += (_, _) =>
+            {
+                if (_menuRow is { } row) action(row);
+            };
+            _rowMenu.Items.Add(item);
+        }
+
+        Add("浏览文件夹", row => RunTool(row, folder => Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { folder }, UseShellExecute = false })));
+        Add("命令提示符", row => RunTool(row, folder => Process.Start(new ProcessStartInfo("cmd.exe") { WorkingDirectory = folder, UseShellExecute = true })));
+        _rowMenu.Items.Add(new MenuFlyoutSeparator());
+        Add("复制路径", row => CopyText(row.Node.FullPath));
+        Add("将文件和大小信息复制到剪贴板", row => CopyText(DiskRowInfo.ToClipboardText(row.Node)));
+    }
+
+    // Right-click (or the menu key) on a row: select it and show the menu next to it.
+    private void OnRowContextRequested(UIElement sender, ContextRequestedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: DiskTreeRow row } host) return;
+
+        _menuRow = row;
+        TreeList.SelectedItem = row;
+        if (e.TryGetPosition(host, out var point)) _rowMenu.ShowAt(host, point);
+        else _rowMenu.ShowAt(host);
+        e.Handled = true;
+    }
+
+    // The "[N files]" row stands for the files of its folder, so its path is that folder too.
+    private void RunTool(DiskTreeRow row, Action<string> start)
+    {
+        var folder = row.Node.FullPath;
+        if (!Directory.Exists(folder))
+        {
+            StatusText.Text = $"文件夹已不存在：{folder}";
+            return;
+        }
+
+        try
+        {
+            start(folder);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            StatusText.Text = $"无法打开：{ex.Message}";
+        }
+    }
+
+    private void CopyText(string text)
+    {
+        var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+        package.SetText(text);
+        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
     }
 
     // Used from the row template (x:Bind functions).
@@ -50,6 +112,17 @@ public sealed partial class DiskAnalyzerView : Page
     {
         _module = (DiskAnalyzerModule)e.Parameter;
         _ = LoadGamesAsync();
+
+        ScanPendingPath();
+    }
+
+    /// <summary>Started from the right-click menu: scans the folder it asked for, if any.</summary>
+    public void ScanPendingPath()
+    {
+        if (App.TakePendingAnalyzePath() is not { } path) return;
+
+        PathBox.Text = path;
+        _ = ScanAsync(path);
     }
 
     private async Task LoadGamesAsync()
@@ -90,6 +163,9 @@ public sealed partial class DiskAnalyzerView : Page
         await ScanAsync(PathBox.Text.Trim());
     }
 
+    // A request from the right-click menu can arrive while a scan is running; the newest request is the one that is shown.
+    private int _scanVersion;
+
     private async Task ScanAsync(string path)
     {
         if (path.Length == 0 || !Directory.Exists(path))
@@ -98,6 +174,7 @@ public sealed partial class DiskAnalyzerView : Page
             return;
         }
 
+        var version = ++_scanVersion;
         SetBusy(true);
         StatusText.Text = $"正在扫描 {path} …";
         try
@@ -105,6 +182,7 @@ public sealed partial class DiskAnalyzerView : Page
             var stopwatch = Stopwatch.StartNew();
             var result = await _module.ScanAsync(path);
             stopwatch.Stop();
+            if (version != _scanVersion) return;
 
             _tree = result.CreateTreeModel();
             TreeList.ItemsSource = _tree.Rows;
@@ -113,11 +191,11 @@ public sealed partial class DiskAnalyzerView : Page
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"扫描失败：{ex.Message}";
+            if (version == _scanVersion) StatusText.Text = $"扫描失败：{ex.Message}";
         }
         finally
         {
-            SetBusy(false);
+            if (version == _scanVersion) SetBusy(false);
         }
     }
 

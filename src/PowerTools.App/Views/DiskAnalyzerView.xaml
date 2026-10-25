@@ -84,7 +84,7 @@
                         </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="tree:DiskTreeRow">
-                                <Grid>
+                                <Grid ContextRequested="OnRowContextRequested">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="110" />
