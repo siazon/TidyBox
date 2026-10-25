@@ -1,4 +1,5 @@
 using PowerTools.Core.Elevation;
+using PowerTools.Core.Recycling;
 using PowerTools.Modules.Uninstaller.Catalog;
 using PowerTools.Modules.Uninstaller.Model;
 using PowerTools.Modules.Uninstaller.Residue;

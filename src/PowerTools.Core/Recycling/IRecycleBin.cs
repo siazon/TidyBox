@@ -1,6 +1,6 @@
 using Microsoft.VisualBasic.FileIO;
 
-namespace PowerTools.Modules.Uninstaller.Residue;
+namespace PowerTools.Core.Recycling;
 
 public interface IRecycleBin
 {

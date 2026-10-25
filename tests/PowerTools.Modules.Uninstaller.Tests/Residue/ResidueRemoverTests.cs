@@ -1,5 +1,6 @@
 using System.Text.Json;
 using PowerTools.Core.Elevation;
+using PowerTools.Core.Recycling;
 using PowerTools.Modules.Uninstaller.Residue;
 
 namespace PowerTools.Modules.Uninstaller.Tests.Residue;
