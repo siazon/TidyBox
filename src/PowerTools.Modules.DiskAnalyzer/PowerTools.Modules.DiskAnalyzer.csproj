@@ -14,4 +14,8 @@
     <ProjectReference Include="..\PowerTools.Core\PowerTools.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Steam\KnownSharedFolders.json" />
+  </ItemGroup>
+
 </Project>
