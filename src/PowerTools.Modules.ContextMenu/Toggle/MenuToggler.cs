@@ -90,9 +90,9 @@ public sealed class MenuToggler
                 if (key?.GetValue(LegacyDisable) is not null) key.DeleteValue(LegacyDisable);
             }
 
-            // If the machine hive defines this verb, the user key only existed as our override: drop it once empty.
+            // A key with nothing left in it is no verb anyone can use: it can only be our own leftover override.
             using var remaining = _roots.User.OpenSubKey(relative);
-            if (remaining is { ValueCount: 0, SubKeyCount: 0 } && MachineDefinesVerb(relative))
+            if (remaining is { ValueCount: 0, SubKeyCount: 0 })
             {
                 remaining.Close();
                 _roots.User.DeleteSubKey(relative, throwOnMissingSubKey: false);
@@ -114,12 +114,6 @@ public sealed class MenuToggler
     {
         using var key = _roots.User.OpenSubKey(ContextMenuRegistryRoots.BlockedPath);
         return key is not null && key.GetValueNames().Any(name => ClsidText.Normalize(name) == clsid);
-    }
-
-    private bool MachineDefinesVerb(string relative)
-    {
-        using var key = _roots.Machine.OpenSubKey(relative);
-        return key is not null;
     }
 
     private static ToggleResult Fail(string error) => new(false, error);

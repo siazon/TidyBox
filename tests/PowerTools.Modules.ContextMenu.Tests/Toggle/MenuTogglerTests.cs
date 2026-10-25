@@ -179,6 +179,21 @@ public class MenuTogglerTests : IDisposable
     }
 
     [Fact]
+    public void SetEnabled_EnableVerbWhoseMachineDefinitionIsGone_DeletesTheLeftoverEmptyKey()
+    {
+        // e.g. we disabled git_shell, then Git was uninstalled: only our override key remains, holding just LegacyDisable.
+        _sandbox.AddVerb(Hive.User, MenuLocation.Directory, "git_shell", ("LegacyDisable", ""));
+        var entry = Reload("Directory|Verb|git_shell");
+        Assert.Equal(MenuEntryState.Disabled, entry.State);
+        Assert.False(entry.InMachineHive);
+
+        Assert.True(Toggler().SetEnabled(entry, enabled: true).Success);
+
+        using var key = UserVerbKey("Directory", "git_shell");
+        Assert.Null(key); // an entirely empty key is not a verb anyone could use
+    }
+
+    [Fact]
     public void SetEnabled_AlreadyInTargetState_IsANoOpSuccessThatNeedsNoRestart()
     {
         var handler = AddHandler("WinRAR");
