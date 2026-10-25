@@ -18,10 +18,12 @@ public sealed class MenuToggler
     private const string LegacyDisable = "LegacyDisable";
 
     private readonly ContextMenuRegistryRoots _roots;
+    private readonly IRegistryWriter _writer;
 
-    public MenuToggler(ContextMenuRegistryRoots roots)
+    public MenuToggler(ContextMenuRegistryRoots roots, IRegistryWriter? writer = null)
     {
         _roots = roots;
+        _writer = writer ?? new RegExeRegistryWriter();
     }
 
     public ToggleResult SetEnabled(MenuEntry entry, bool enabled)
@@ -57,22 +59,20 @@ public sealed class MenuToggler
     private ToggleResult SetHandlerEnabled(string clsid, bool enabled)
     {
         var changed = false;
-        if (enabled)
+        using (var key = _roots.User.OpenSubKey(ContextMenuRegistryRoots.BlockedPath))
         {
-            using var key = _roots.User.OpenSubKey(ContextMenuRegistryRoots.BlockedPath, writable: true);
-            foreach (var name in key?.GetValueNames() ?? Array.Empty<string>())
+            var names = key?.GetValueNames() ?? Array.Empty<string>();
+            if (enabled)
             {
-                if (ClsidText.Normalize(name) != clsid) continue;
-                key!.DeleteValue(name);
-                changed = true;
+                foreach (var name in names.Where(name => ClsidText.Normalize(name) == clsid))
+                {
+                    _writer.DeleteValue(_roots.User, ContextMenuRegistryRoots.BlockedPath, name);
+                    changed = true;
+                }
             }
-        }
-        else
-        {
-            using var key = _roots.User.CreateSubKey(ContextMenuRegistryRoots.BlockedPath);
-            if (!key.GetValueNames().Any(name => ClsidText.Normalize(name) == clsid))
+            else if (!names.Any(name => ClsidText.Normalize(name) == clsid))
             {
-                key.SetValue(clsid, "", RegistryValueKind.String);
+                _writer.SetString(_roots.User, ContextMenuRegistryRoots.BlockedPath, clsid, "");
                 changed = true;
             }
         }
@@ -90,23 +90,18 @@ public sealed class MenuToggler
 
         if (enabled)
         {
-            using (var key = _roots.User.OpenSubKey(relative, writable: true))
-            {
-                if (key?.GetValue(LegacyDisable) is not null) key.DeleteValue(LegacyDisable);
-            }
+            _writer.DeleteValue(_roots.User, relative, LegacyDisable);
 
             // A key with nothing left in it is no verb anyone can use: it can only be our own leftover override.
-            using var remaining = _roots.User.OpenSubKey(relative);
-            if (remaining is { ValueCount: 0, SubKeyCount: 0 })
-            {
-                remaining.Close();
-                _roots.User.DeleteSubKey(relative, throwOnMissingSubKey: false);
-            }
+            bool empty;
+            using (var remaining = _roots.User.OpenSubKey(relative)) empty = remaining is { ValueCount: 0, SubKeyCount: 0 };
+            if (empty) _writer.DeleteKey(_roots.User, relative);
         }
         else
         {
-            using var key = _roots.User.CreateSubKey(relative);
-            if (key.GetValue(LegacyDisable) is null) key.SetValue(LegacyDisable, "", RegistryValueKind.String);
+            bool alreadyDisabled;
+            using (var key = _roots.User.OpenSubKey(relative)) alreadyDisabled = key?.GetValue(LegacyDisable) is not null;
+            if (!alreadyDisabled) _writer.SetString(_roots.User, relative, LegacyDisable, "");
         }
 
         using var check = _roots.User.OpenSubKey(relative);

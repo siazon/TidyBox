@@ -100,6 +100,29 @@ public class ClassicMenuSwitchTests : IDisposable
     }
 
     [Fact]
+    public void SetEnabled_IsWrittenOnlyThroughTheWriter()
+    {
+        var writer = new RecordingRegistryWriter();
+
+        new ClassicMenuSwitch(_sandbox.Roots, writer).SetEnabled(true);
+
+        Assert.Equal(new[] { $@"SetString|{SwitchKey}\InprocServer32|(default)|" }, writer.Calls);
+        using var key = _sandbox.Roots.User.OpenSubKey(SwitchKey);
+        Assert.Null(key); // nothing was written behind the writer's back
+    }
+
+    [Fact]
+    public void SetEnabled_False_RemovesTheSwitchKeyThroughTheWriter()
+    {
+        Switch().SetEnabled(true);
+        var writer = new RecordingRegistryWriter();
+
+        new ClassicMenuSwitch(_sandbox.Roots, writer).SetEnabled(false);
+
+        Assert.Equal(new[] { $"DeleteKey|{SwitchKey}" }, writer.Calls);
+    }
+
+    [Fact]
     public void SetEnabled_RegistryRefusesTheWrite_ReturnsFailureInsteadOfThrowing()
     {
         var me = WindowsIdentity.GetCurrent().User!;

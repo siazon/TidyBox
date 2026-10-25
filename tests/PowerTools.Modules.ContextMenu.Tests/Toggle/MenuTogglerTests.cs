@@ -282,6 +282,55 @@ public class MenuTogglerTests : IDisposable
         Assert.Equal(machineBefore, Snapshot(_sandbox.Roots.Machine));
     }
 
+    // A packaged app's own registry calls are virtualized and never reach the real registry; only a child process's do.
+    // With a writer that changes nothing, an unchanged registry shows no write was made behind the writer's back.
+    [Fact]
+    public void SetEnabled_DisableHandlerAndVerb_AreWrittenOnlyThroughTheWriter()
+    {
+        var handler = AddHandler("WinRAR");
+        var verb = AddVerb("git_shell");
+        var before = Snapshot(_sandbox.Roots.User);
+        var writer = new RecordingRegistryWriter();
+        var toggler = new MenuToggler(_sandbox.Roots, writer);
+
+        toggler.SetEnabled(handler, enabled: false);
+        toggler.SetEnabled(verb, enabled: false);
+
+        Assert.Equal(new[]
+        {
+            $@"SetString|{ContextMenuRegistryRoots.BlockedPath}|{ClsidA}|",
+            $@"SetString|{ContextMenuRegistryRoots.ClassesPath}\Directory\shell\git_shell|LegacyDisable|",
+        }, writer.Calls);
+        Assert.Equal(before, Snapshot(_sandbox.Roots.User));
+    }
+
+    [Fact]
+    public void SetEnabled_EnableHandler_RemovesTheBlockedValueThroughTheWriter()
+    {
+        var handler = AddHandler("WinRAR");
+        _sandbox.Block(Hive.User, ClsidA.ToLowerInvariant());
+        var before = Snapshot(_sandbox.Roots.User);
+        var writer = new RecordingRegistryWriter();
+
+        new MenuToggler(_sandbox.Roots, writer).SetEnabled(Reload(handler.Id), enabled: true);
+
+        Assert.Equal(new[] { $@"DeleteValue|{ContextMenuRegistryRoots.BlockedPath}|{ClsidA.ToLowerInvariant()}" }, writer.Calls);
+        Assert.Equal(before, Snapshot(_sandbox.Roots.User));
+    }
+
+    [Fact]
+    public void SetEnabled_EnableVerbThatLeavesAnEmptyKey_DeletesTheValueThenTheKeyThroughTheWriter()
+    {
+        _sandbox.AddVerb(Hive.User, MenuLocation.Directory, "git_shell", ("LegacyDisable", ""));
+        var entry = Reload("Directory|Verb|git_shell");
+        var writer = new RecordingRegistryWriter(new RegExeRegistryWriter());
+
+        new MenuToggler(_sandbox.Roots, writer).SetEnabled(entry, enabled: true);
+
+        var key = $@"{ContextMenuRegistryRoots.ClassesPath}\Directory\shell\git_shell";
+        Assert.Equal(new[] { $@"DeleteValue|{key}|LegacyDisable", $@"DeleteKey|{key}" }, writer.Calls);
+    }
+
     [Fact]
     public void SetEnabled_RegistryRefusesTheWrite_ReturnsFailureInsteadOfThrowing()
     {
