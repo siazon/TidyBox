@@ -14,6 +14,7 @@
     <EnableMsixTooling>true</EnableMsixTooling>
     <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\PowerTools.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -32,8 +33,9 @@
   </Target>
 
   <ItemGroup>
-    <!-- PNG assets are picked up by default; SVG is not. -->
+    <!-- PNG assets are picked up by default; SVG and ICO are not. The icon is shown next to the Explorer right-click entries. -->
     <Content Include="Assets\app-placeholder.svg" />
+    <Content Include="Assets\PowerTools.ico" />
   </ItemGroup>
 
   <ItemGroup>
