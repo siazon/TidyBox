@@ -50,3 +50,22 @@
 - 之前的"注册表只展示、不可删除"的结论作废；帮手端需要新增注册表白名单校验，这部分尚未实现。
 - 审核风险：做法只是启动系统自带的 `reg.exe`，没有借助计划任务或资源管理器绕出沙箱，应当比较稳妥，但提审说明里要写明用途。
 - 实现时注意：`reg.exe` 是 32 位进程的 WOW 重定向会改变 HKLM\SOFTWARE 的视图，必须带 `/reg:64`；路径要用参数数组/严格引号，不能把用户可控字符串拼进命令行。
+
+## 补充验证三：应用图标（logo）怎么取
+
+方法：在已部署的包里放一个临时探针，用不同方式取图标、转成 PNG 存盘，我再逐个看图。验证后探针已删除。
+
+| 来源 | 做法 | 结果 |
+|---|---|---|
+| 桌面程序的 exe | `SHCreateItemFromParsingName(路径)` → `IShellItemImageFactory.GetImage(64×64, SIIGBF_ICONONLY)` → `GetDIBits` 取像素 → `BitmapEncoder` 写 PNG | 正确（PotPlayer 的黄色播放图标），带透明通道；第一次约 150 ms，之后 5–65 ms |
+| `DisplayIcon` 为 `文件,序号` | `PrivateExtractIcons(文件, 序号, 64, 64)` → `GetIconInfo` → 取 `hbmColor` | 可行（`imageres.dll,5`，约 160 ms），透明通道正常 |
+| 商店应用 | `package.GetAppListEntriesAsync()` 拿到 AUMID（全部 6 个测试包都有），再 `shell:AppsFolder\<AUMID>` 取图 | **flags=0（默认）正确**（计算器、画图的真实图标），23–160 ms；**`SIIGBF_ICONONLY` 会返回通用的白纸图标，是错的，商店应用不能用它** |
+| 商店应用（读清单自己挑） | 读 `AppxManifest.xml` 的 `Square44x44Logo`，在 Assets 里挑变体 | 清单和图片都能读（`WindowsApps` 可读），但变体有几十种（scale、targetsize、altform-unplated、对比度），挑出来的 Codex 图标是白色线稿，在白底上看不见。不如走 shell。 |
+
+结论：
+
+- 桌面程序/Steam：`DisplayIcon`（含序号）→ 没有就取 `AppFolder` 里的主程序 → 通用图标。取图用 `IShellItemImageFactory`（ICONONLY）。
+- 商店应用：用 AUMID + `shell:AppsFolder`，**不要加 ICONONLY**。
+- 白色线稿的图标（比如 Codex）在浅色背景上看不见，界面里要给图标垫一块浅灰/半透明的小底板。
+- 开销：150 多项在后台限流取，约几秒，不阻塞列表；缓存不是第一版必需。
+- 没有新的权限或清单改动。
