@@ -27,12 +27,21 @@ public sealed class RemoveResidualHandler : IElevatedOperationHandler
     private readonly IReadOnlyList<string> _allowedRoots;
     private readonly string _quarantineRoot;
     private readonly IRegistryTool _registryTool;
+    private readonly QuarantineTrust _trust;
+    private readonly Func<DateTime> _clock;
     private int _backupCounter;
+    private bool _quarantineChecked;
+    private string? _quarantineError;
 
     /// <param name="allowedRoots">Folders whose subfolders may be removed; defaults to Program Files (both) and ProgramData.</param>
     /// <param name="quarantineRoot">Where removed folders are moved; defaults to ProgramData\PowerTools\Quarantine.</param>
-    public RemoveResidualHandler(IReadOnlyList<string>? allowedRoots = null, string? quarantineRoot = null, IRegistryTool? registryTool = null)
+    /// <param name="trust">Who may control the quarantine folders; defaults to Administrators and SYSTEM.</param>
+    /// <param name="clock">Names the per-request quarantine folder; defaults to the local time.</param>
+    public RemoveResidualHandler(IReadOnlyList<string>? allowedRoots = null, string? quarantineRoot = null, IRegistryTool? registryTool = null,
+        QuarantineTrust? trust = null, Func<DateTime>? clock = null)
     {
+        _trust = trust ?? QuarantineTrust.Machine;
+        _clock = clock ?? (() => DateTime.Now);
         _registryTool = registryTool ?? new ProcessRegistryTool();
         _allowedRoots = (allowedRoots ?? new[]
             {
@@ -64,7 +73,8 @@ public sealed class RemoveResidualHandler : IElevatedOperationHandler
             return Task.FromResult(new ElevationResponse(false, "invalid request payload", null));
         }
 
-        var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+        _quarantineChecked = false;
+        var stamp = _clock().ToString("yyyyMMdd-HHmmss");
         var results = folders.Select(f => Remove(f, stamp)).Concat(keys.Select(k => RemoveKey(k, stamp))).ToList();
         var json = JsonSerializer.Serialize(results.Select(r => new { path = r.Path, success = r.Error is null, error = r.Error }));
         var allOk = results.All(r => r.Error is null);
@@ -89,10 +99,17 @@ public sealed class RemoveResidualHandler : IElevatedOperationHandler
         var error = ValidateKey(key);
         if (error is not null) return (key, error);
 
+        var unsafeQuarantine = QuarantineProblem();
+        if (unsafeQuarantine is not null) return (key, unsafeQuarantine);
+
         try
         {
             // The backup comes first and must really exist: with no way back, the key is not deleted.
-            var backupFolder = Directory.CreateDirectory(Path.Combine(_quarantineRoot, stamp, "registry")).FullName;
+            var stampFolder = Path.Combine(_quarantineRoot, stamp);
+            var backupFolder = Path.Combine(stampFolder, "registry");
+            var link = QuarantineFolder.CreateInside(stampFolder) ?? QuarantineFolder.CreateInside(backupFolder);
+            if (link is not null) return (key, link);
+
             var safeName = new string(key.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
             var backup = Path.Combine(backupFolder, $"{++_backupCounter}-{safeName.Substring(0, Math.Min(safeName.Length, 80))}.reg");
 
@@ -140,9 +157,15 @@ public sealed class RemoveResidualHandler : IElevatedOperationHandler
         var error = Validate(path, out var full);
         if (error is not null) return (path, error);
 
+        var unsafeQuarantine = QuarantineProblem();
+        if (unsafeQuarantine is not null) return (path, unsafeQuarantine);
+
         try
         {
-            var destinationFolder = Directory.CreateDirectory(Path.Combine(_quarantineRoot, stamp)).FullName;
+            var destinationFolder = Path.Combine(_quarantineRoot, stamp);
+            var link = QuarantineFolder.CreateInside(destinationFolder);
+            if (link is not null) return (path, link);
+
             var destination = Path.Combine(destinationFolder, Path.GetFileName(full));
             for (var n = 2; Directory.Exists(destination); n++)
             {
@@ -157,6 +180,20 @@ public sealed class RemoveResidualHandler : IElevatedOperationHandler
         {
             return (path, ex.Message);
         }
+    }
+
+    // Once per request, and only when something is really about to be moved or backed up. The parent is secured too:
+    // whoever controls it could replace the quarantine folder itself.
+    private string? QuarantineProblem()
+    {
+        if (!_quarantineChecked)
+        {
+            _quarantineChecked = true;
+            var parent = Path.GetDirectoryName(_quarantineRoot);
+            _quarantineError = (parent is null ? null : QuarantineFolder.Secure(parent, _trust)) ?? QuarantineFolder.Secure(_quarantineRoot, _trust);
+        }
+
+        return _quarantineError;
     }
 
     private string? Validate(string path, out string full)

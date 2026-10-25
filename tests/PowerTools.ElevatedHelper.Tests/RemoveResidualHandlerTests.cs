@@ -29,7 +29,7 @@ public sealed class RemoveResidualHandlerTests : IDisposable
         Directory.Delete(_base, recursive: true);
     }
 
-    private RemoveResidualHandler Handler() => new(new[] { _allowed }, _quarantine);
+    private RemoveResidualHandler Handler() => new(new[] { _allowed }, _quarantine, trust: TestTrust.CurrentUser);
 
     private static string Payload(params string[] folders) => JsonSerializer.Serialize(new { folders });
 
@@ -156,7 +156,7 @@ public sealed class RemoveResidualHandlerTests : IDisposable
     public async Task Folders_already_in_quarantine_are_rejected()
     {
         Directory.CreateDirectory(_allowed);
-        var quarantineInsideAllowed = new RemoveResidualHandler(new[] { _base }, _quarantine);
+        var quarantineInsideAllowed = new RemoveResidualHandler(new[] { _base }, _quarantine, trust: TestTrust.CurrentUser);
         var kept = Directory.CreateDirectory(Path.Combine(_quarantine, "20240101-000000", "Foo")).FullName;
 
         var response = await quarantineInsideAllowed.HandleAsync(Payload(kept));
@@ -215,7 +215,7 @@ public sealed class RemoveResidualHandlerRegistryTests : IDisposable
 
     public void Dispose() => Directory.Delete(_base, recursive: true);
 
-    private RemoveResidualHandler Handler() => new(new[] { Path.Combine(_base, "Program Files") }, Path.Combine(_base, "Quarantine"), _tool);
+    private RemoveResidualHandler Handler() => new(new[] { Path.Combine(_base, "Program Files") }, Path.Combine(_base, "Quarantine"), _tool, TestTrust.CurrentUser);
 
     private async Task<(bool Success, List<(string Path, bool Success, string? Error)> Items)> Run(params string[] keys)
     {
