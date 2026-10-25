@@ -32,8 +32,19 @@ public class ContextMenuRegistryRootsTests
     {
         var roots = ContextMenuRegistryRoots.Real();
 
-        Assert.Same(Registry.LocalMachine, roots.Machine);
-        Assert.Same(Registry.CurrentUser, roots.User);
+        Assert.Equal("HKEY_LOCAL_MACHINE", roots.Machine.Name);
+        Assert.Equal("HKEY_CURRENT_USER", roots.User.Name);
+    }
+
+    [Fact]
+    public void Real_AlwaysUsesTheNative64BitRegistryView_SoA32BitAppStillSpeaksToExplorersRegistry()
+    {
+        // Explorer is 64-bit. A 32-bit process (VS defaults to an x86 package) that used the default view would read and
+        // write HKCU\Software\Classes\Wow6432Node\... instead, and its changes would never reach Explorer.
+        var roots = ContextMenuRegistryRoots.Real();
+
+        Assert.Equal(RegistryView.Registry64, roots.Machine.View);
+        Assert.Equal(RegistryView.Registry64, roots.User.View);
     }
 
     [Fact]

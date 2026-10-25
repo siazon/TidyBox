@@ -21,5 +21,11 @@ public sealed class ContextMenuRegistryRoots
 
     public RegistryKey User { get; }
 
-    public static ContextMenuRegistryRoots Real() => new(Registry.LocalMachine, Registry.CurrentUser);
+    /// <summary>
+    /// The real hives, always in the native 64-bit view. Explorer is 64-bit, so what it reads is what must be written;
+    /// the default view of a 32-bit process would silently be redirected to Wow6432Node.
+    /// </summary>
+    public static ContextMenuRegistryRoots Real() => new(
+        RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64),
+        RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Registry64));
 }
