@@ -43,18 +43,23 @@ public sealed class RemoveResidualHandler : IElevatedOperationHandler
         _trust = trust ?? QuarantineTrust.Machine;
         _clock = clock ?? (() => DateTime.Now);
         _registryTool = registryTool ?? new ProcessRegistryTool();
-        _allowedRoots = (allowedRoots ?? new[]
-            {
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            })
+        _allowedRoots = (allowedRoots ?? DefaultAllowedRoots())
             .Where(r => r.Length > 0)
             .Select(Full)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
         _quarantineRoot = Full(quarantineRoot
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "PowerTools", "Quarantine"));
+    }
+
+    // This helper is a 32-bit process on 64-bit Windows, where SpecialFolder.ProgramFiles is "Program Files (x86)";
+    // ProgramW6432 is the native one.
+    public static IReadOnlyList<string> DefaultAllowedRoots(Func<string, string?>? environment = null)
+    {
+        var env = environment ?? Environment.GetEnvironmentVariable;
+        return new[] { "ProgramW6432", "ProgramFiles", "ProgramFiles(x86)", "ProgramData" }
+            .Select(name => env(name) ?? "")
+            .ToList();
     }
 
     public string OperationType => "uninstall.removeResidual";

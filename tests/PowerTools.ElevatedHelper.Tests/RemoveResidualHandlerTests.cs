@@ -51,6 +51,25 @@ public sealed class RemoveResidualHandlerTests : IDisposable
     }
 
     [Fact]
+    public void The_default_roots_include_the_native_program_files_even_when_the_helper_is_a_32_bit_process()
+    {
+        // What a 32-bit process on 64-bit Windows sees: ProgramFiles points at the x86 folder.
+        var variables = new Dictionary<string, string>
+        {
+            ["ProgramW6432"] = @"C:\Program Files",
+            ["ProgramFiles"] = @"C:\Program Files (x86)",
+            ["ProgramFiles(x86)"] = @"C:\Program Files (x86)",
+            ["ProgramData"] = @"C:\ProgramData",
+        };
+
+        var roots = RemoveResidualHandler.DefaultAllowedRoots(name => variables.GetValueOrDefault(name));
+
+        Assert.Contains(@"C:\Program Files", roots);
+        Assert.Contains(@"C:\Program Files (x86)", roots);
+        Assert.Contains(@"C:\ProgramData", roots);
+    }
+
+    [Fact]
     public async Task Operation_type_is_the_one_the_app_sends()
     {
         Assert.Equal("uninstall.removeResidual", Handler().OperationType);
