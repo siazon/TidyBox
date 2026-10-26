@@ -3,7 +3,11 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="PowerTools">
-    <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="True">
-        <Frame x:Name="ContentFrame" />
-    </NavigationView>
+    <!-- NavigationView does not reliably re-theme its own background when RequestedTheme is set on it directly
+         (confirmed WinUI bug, microsoft/microsoft-ui-xaml#6938); the theme is set on this wrapping Grid instead. -->
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="True">
+            <Frame x:Name="ContentFrame" />
+        </NavigationView>
+    </Grid>
 </Window>
