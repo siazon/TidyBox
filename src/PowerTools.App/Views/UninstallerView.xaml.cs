@@ -315,13 +315,14 @@ public sealed partial class UninstallerView : Page
         RefreshButton.IsEnabled = false;
 
         var succeeded = new List<string>();
+        var pending = new List<string>(); // handed off to Steam/a background installer; not confirmed done yet
         var needsAdmin = new List<string>();
         var failed = new List<string>();
         var allLeftovers = new List<ResidueItem>();
 
         foreach (var row in chosen)
         {
-            StatusText.Text = $"正在卸载“{row.DisplayName}”…（{succeeded.Count + needsAdmin.Count + failed.Count + 1}/{chosen.Count}）";
+            StatusText.Text = $"正在卸载“{row.DisplayName}”…（{succeeded.Count + pending.Count + needsAdmin.Count + failed.Count + 1}/{chosen.Count}）";
             try
             {
                 var result = await _module.UninstallAsync(row.App);
@@ -333,6 +334,12 @@ public sealed partial class UninstallerView : Page
                 {
                     succeeded.Add(row.DisplayName);
                     allLeftovers.AddRange(result.Leftovers);
+                }
+                else if (result.Outcome.Status == UninstallStatus.MaybeStillRunning)
+                {
+                    // Steam/MSI-style: handed off successfully, but finishes in the background on its own schedule.
+                    // Batch mode does not wait for each one individually; a manual refresh will show the real state.
+                    pending.Add(row.DisplayName);
                 }
                 else
                 {
@@ -349,6 +356,7 @@ public sealed partial class UninstallerView : Page
 
         var parts = new List<string>();
         if (succeeded.Count > 0) parts.Add($"成功卸载 {succeeded.Count} 个");
+        if (pending.Count > 0) parts.Add($"{pending.Count} 个已交给对应程序处理，完成后请刷新列表确认：{string.Join("、", pending)}");
         if (needsAdmin.Count > 0) parts.Add($"{needsAdmin.Count} 个需要管理员权限，已跳过：{string.Join("、", needsAdmin)}");
         if (failed.Count > 0) parts.Add($"{failed.Count} 个失败：{string.Join("；", failed)}");
         StatusText.Text = string.Join("；", parts) + "。";

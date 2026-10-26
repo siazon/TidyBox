@@ -51,7 +51,9 @@ public sealed class UninstallRouter
         }
 
         _urls.Open(new Uri("steam://uninstall/" + id));
-        return new UninstallOutcome(UninstallStatus.Completed, null, "已交给 Steam 处理，请在 Steam 的窗口中确认。");
+        // Opening the URL only hands off to Steam's own confirmation window; the actual removal happens in the
+        // background on Steam's own schedule, so this is "maybe still running", not "done" (same as MSI/Squirrel).
+        return new UninstallOutcome(UninstallStatus.MaybeStillRunning, null, "已交给 Steam 处理，请在 Steam 的窗口中确认；完成后列表会自动刷新。");
     }
 
     private async Task<UninstallOutcome> UninstallStoreAsync(InstalledApp app, CancellationToken ct)

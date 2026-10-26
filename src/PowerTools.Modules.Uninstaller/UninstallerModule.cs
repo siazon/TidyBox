@@ -102,9 +102,11 @@ public sealed class UninstallerModule : IToolModule
             ? await Task.Run(() => _scanner.FindLeftovers(app, before), ct)
             : Array.Empty<ResidueItem>();
 
-        // MSI and Squirrel-style launchers exit at once and finish in the background. If some catalog can tell when the
-        // program disappears from the installed list, the caller can wait for that and scan afterwards.
-        var deferred = before is not null && outcome.Status == UninstallStatus.MaybeStillRunning && IsInstalled(app) is not null
+        // MSI/Squirrel-style launchers exit at once and finish in the background; Steam itself also only hands off
+        // to its own window and returns immediately. Either way the caller cannot know "done" synchronously, so if
+        // some catalog can tell when the program disappears from the installed list, wait for that before telling
+        // the caller to refresh (and, for a desktop program, scan for leftovers once it is really gone).
+        var deferred = outcome.Status == UninstallStatus.MaybeStillRunning && IsInstalled(app) is not null
             ? (Func<CancellationToken, Task<IReadOnlyList<ResidueItem>>>)(token => ScanWhenFinishedAsync(app, before, token))
             : null;
         return new UninstallResult(outcome, leftovers, deferred);
@@ -117,11 +119,13 @@ public sealed class UninstallerModule : IToolModule
     }
 
     // Waits (bounded) until the program is gone from the installed list, gives the uninstaller a moment to finish its
-    // last deletions, then scans. If it never disappears, nothing is reported rather than a guess.
-    private async Task<IReadOnlyList<ResidueItem>> ScanWhenFinishedAsync(InstalledApp app, ResidueSnapshot before, CancellationToken ct)
+    // last deletions, then scans (if there is a snapshot to compare against at all; Steam/Store clean up their own
+    // files, so there is nothing to scan for them — the wait itself is still useful so the caller knows to refresh).
+    private async Task<IReadOnlyList<ResidueItem>> ScanWhenFinishedAsync(InstalledApp app, ResidueSnapshot? before, CancellationToken ct)
     {
         var limits = _watchOptions with { MaxDuration = TimeSpan.FromMinutes(2) };
         if (!await LeftoverWatcher.WaitUntilAsync(() => IsInstalled(app) != true, limits, _delay, ct)) return Array.Empty<ResidueItem>();
+        if (before is null) return Array.Empty<ResidueItem>();
 
         try
         {

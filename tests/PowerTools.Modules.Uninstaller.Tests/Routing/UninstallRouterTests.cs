@@ -23,7 +23,9 @@ public class UninstallRouterTests
 
         Assert.Equal("steam://uninstall/220", _urls.Opened!.ToString());
         Assert.Null(_runner.Started);
-        Assert.Equal(UninstallStatus.Completed, outcome.Status);
+        // Launching the URL only hands off to Steam's own window; Steam does the actual uninstall in the
+        // background on its own schedule, so the caller must wait for it (same as MSI/Squirrel) before refreshing.
+        Assert.Equal(UninstallStatus.MaybeStillRunning, outcome.Status);
     }
 
     [Theory]

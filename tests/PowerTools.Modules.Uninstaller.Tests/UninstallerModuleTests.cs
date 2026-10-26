@@ -168,8 +168,27 @@ public sealed class UninstallerModuleTests : IDisposable
 
         Assert.Empty(steam.Leftovers);
         Assert.Empty(store.Leftovers);
-        Assert.Equal(UninstallStatus.Completed, steam.Outcome.Status);
+        // Steam only hands off to its own window; the actual removal happens in the background, so this is
+        // "maybe still running", not "done" (Store's PackageManager call really does wait, so it stays Completed).
+        Assert.Equal(UninstallStatus.MaybeStillRunning, steam.Outcome.Status);
         Assert.Equal(UninstallStatus.Completed, store.Outcome.Status);
+    }
+
+    [Fact]
+    public async Task A_steam_uninstall_gets_a_deferred_wait_that_refreshes_once_steam_removes_it_but_scans_nothing()
+    {
+        var checks = 0;
+        var catalog = new FakeCatalog { Installed = () => ++checks < 3 };
+        var app = App("Game", AppSource.Steam, steamId: "220");
+
+        var result = await Module(catalog).UninstallAsync(app);
+
+        Assert.Equal(UninstallStatus.MaybeStillRunning, result.Outcome.Status);
+        Assert.NotNull(result.DeferredScan);
+
+        // Steam cleans up its own files; there is nothing for the residue scanner to report, but the caller still
+        // gets told "it is really gone now" so it knows to refresh the list.
+        Assert.Empty(await result.DeferredScan!(CancellationToken.None));
     }
 
     [Fact]
