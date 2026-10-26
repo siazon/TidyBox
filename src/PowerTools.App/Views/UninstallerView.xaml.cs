@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using PowerTools.Modules.DiskAnalyzer;
 using PowerTools.Modules.Uninstaller;
 using PowerTools.Modules.Uninstaller.Model;
 using PowerTools.Modules.Uninstaller.Residue;
@@ -396,5 +397,70 @@ public sealed partial class UninstallerView : Page
     {
         _watching?.Cancel();
         ResiduePanel.Visibility = Visibility.Collapsed;
+    }
+
+    private async void OnEmptyRecycleBinClick(object sender, RoutedEventArgs e)
+    {
+        var confirm = new ContentDialog
+        {
+            Title = "清空回收站？",
+            Content = "这会清空整台机器的回收站，不止这次删除的内容，且无法撤销。",
+            PrimaryButtonText = "清空",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+
+        try
+        {
+            await _module.EmptyRecycleBinAsync();
+            StatusText.Text = "回收站已清空。";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"清空回收站失败：{ex.Message}";
+        }
+    }
+
+    private async void OnManageQuarantineClick(object sender, RoutedEventArgs e)
+    {
+        QuarantineSummary summary;
+        try
+        {
+            summary = await _module.InspectQuarantineAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"查看隔离区失败：{ex.Message}";
+            return;
+        }
+
+        if (summary.BatchCount == 0)
+        {
+            StatusText.Text = "隔离区是空的。";
+            return;
+        }
+
+        var confirm = new ContentDialog
+        {
+            Title = "管理隔离区",
+            Content = $"隔离区里有 {summary.BatchCount} 次清理留下的内容，共占用 {ByteSizeFormatter.Format(summary.TotalBytes)}。\n\n清空后无法恢复，确定要清空吗？",
+            PrimaryButtonText = "清空隔离区",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+
+        try
+        {
+            var success = await _module.PurgeQuarantineAsync();
+            StatusText.Text = success ? "隔离区已清空。" : "清空隔离区失败。";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"清空隔离区失败：{ex.Message}";
+        }
     }
 }

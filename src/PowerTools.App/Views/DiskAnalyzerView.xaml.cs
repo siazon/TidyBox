@@ -281,6 +281,30 @@ public sealed partial class DiskAnalyzerView : Page
         }
     }
 
+    private async void OnEmptyRecycleBinClick(object sender, RoutedEventArgs e)
+    {
+        var confirm = new ContentDialog
+        {
+            Title = "清空回收站？",
+            Content = "这会清空整台机器的回收站，不止这次删除的内容，且无法撤销。",
+            PrimaryButtonText = "清空",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+
+        try
+        {
+            await _module.EmptyRecycleBinAsync();
+            StatusText.Text = "回收站已清空。";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"清空回收站失败：{ex.Message}";
+        }
+    }
+
     private async void OnBrowseClick(object sender, RoutedEventArgs e)
     {
         var picker = new Windows.Storage.Pickers.FolderPicker();

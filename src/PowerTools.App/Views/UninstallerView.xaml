@@ -122,6 +122,10 @@
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button x:Name="RemoveButton" Content="删除选中项" Click="OnRemoveResidueClick" />
                     <Button Content="忽略" Click="OnDismissResidueClick" />
+                    <Button Content="清空回收站" Click="OnEmptyRecycleBinClick"
+                            ToolTipService.ToolTip="移到回收站的文件在这里之前不会真正释放磁盘空间；清空回收站会清空整台机器的回收站，不止这次删除的内容" />
+                    <Button Content="管理隔离区" Click="OnManageQuarantineClick"
+                            ToolTipService.ToolTip="查看需要管理员权限才能删除的残留占用了多少空间，并可以清空" />
                 </StackPanel>
             </StackPanel>
         </Border>

@@ -242,6 +242,9 @@
                                 </StackPanel>
                             </StackPanel>
                         </Border>
+
+                        <Button Content="清空回收站" Click="OnEmptyRecycleBinClick" HorizontalAlignment="Left"
+                                ToolTipService.ToolTip="移到回收站的文件在这里之前不会真正释放磁盘空间；清空回收站会清空整台机器的回收站，不止这次删除的内容" />
                     </StackPanel>
                 </Grid>
             </PivotItem>
