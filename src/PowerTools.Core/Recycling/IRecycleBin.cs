@@ -29,8 +29,22 @@ public sealed class ShellRecycleBin : IRecycleBin
     private const uint SherbNoprogressui = 0x00000002;
     private const uint SherbNosound = 0x00000004;
 
+    // SHQUERYRBINFO's native size is bitness-dependent: 24 bytes on x64 (the DWORD is padded so the following
+    // __int64 lands on an 8-byte boundary) but 20 bytes on x86 (no padding). Marshalling it with a single
+    // always-24-byte layout works on x64 but silently returns garbage/zeroed values on a 32-bit process
+    // (confirmed empirically: HRESULT still came back S_OK, with i64NumItems=0 and a bogus i64Size, even though
+    // the Recycle Bin had real content) — this is why PowerTools.App, which is a 32-bit (x86) process, reported
+    // "empty" on a Recycle Bin that was not.
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    private struct SHQUERYRBINFO_X86
+    {
+        public int cbSize;
+        public long i64Size;
+        public long i64NumItems;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
-    private struct SHQUERYRBINFO
+    private struct SHQUERYRBINFO_X64
     {
         public int cbSize;
         public long i64Size;
@@ -40,8 +54,11 @@ public sealed class ShellRecycleBin : IRecycleBin
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern int SHEmptyRecycleBinW(IntPtr hwnd, string? pszRootPath, uint dwFlags);
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    private static extern int SHQueryRecycleBinW(string? pszRootPath, ref SHQUERYRBINFO pSHQueryRBInfo);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "SHQueryRecycleBinW")]
+    private static extern int SHQueryRecycleBinW_X86(string? pszRootPath, ref SHQUERYRBINFO_X86 pSHQueryRBInfo);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, EntryPoint = "SHQueryRecycleBinW")]
+    private static extern int SHQueryRecycleBinW_X64(string? pszRootPath, ref SHQUERYRBINFO_X64 pSHQueryRBInfo);
 
     public void Delete(string folderPath)
         => FileSystem.DeleteDirectory(folderPath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
@@ -61,12 +78,17 @@ public sealed class ShellRecycleBin : IRecycleBin
 
     public RecycleBinUsage GetUsage()
     {
-        var info = new SHQUERYRBINFO { cbSize = Marshal.SizeOf<SHQUERYRBINFO>() };
-        var hr = SHQueryRecycleBinW(null, ref info);
-
-        // An empty Recycle Bin is reported as a failure (E_FAIL) on some Windows versions rather than zero sizes.
-        if (hr != 0) return new RecycleBinUsage(0, 0);
-
-        return new RecycleBinUsage(info.i64Size, (int)info.i64NumItems);
+        if (Environment.Is64BitProcess)
+        {
+            var info = new SHQUERYRBINFO_X64 { cbSize = Marshal.SizeOf<SHQUERYRBINFO_X64>() };
+            var hr = SHQueryRecycleBinW_X64(null, ref info);
+            return hr == 0 ? new RecycleBinUsage(info.i64Size, (int)info.i64NumItems) : new RecycleBinUsage(0, 0);
+        }
+        else
+        {
+            var info = new SHQUERYRBINFO_X86 { cbSize = Marshal.SizeOf<SHQUERYRBINFO_X86>() };
+            var hr = SHQueryRecycleBinW_X86(null, ref info);
+            return hr == 0 ? new RecycleBinUsage(info.i64Size, (int)info.i64NumItems) : new RecycleBinUsage(0, 0);
+        }
     }
 }
