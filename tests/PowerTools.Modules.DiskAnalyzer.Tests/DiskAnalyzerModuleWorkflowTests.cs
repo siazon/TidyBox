@@ -26,9 +26,9 @@ public class DiskAnalyzerModuleWorkflowTests : IDisposable
         public void LaunchUninstall(string appId) => Launched.Add(appId);
     }
 
-    private DiskAnalyzerModule NewModule(string? steam = null, ISteamUninstallLauncher? launcher = null)
+    private DiskAnalyzerModule NewModule(string? steam = null, ISteamUninstallLauncher? launcher = null, Func<TimeSpan, CancellationToken, Task>? delay = null)
         => new(steamInstallPathOverride: steam ?? @"C:\DoesNotExist", snapshotDirectory: Snapshots, steamUninstallLauncher: launcher,
-            steamAppCache: new SteamAppCache(CacheFile));
+            steamAppCache: new SteamAppCache(CacheFile), delay: delay);
 
     private void WriteData(string relativePath, int bytes)
     {
@@ -196,5 +196,35 @@ public class DiskAnalyzerModuleWorkflowTests : IDisposable
         module.UninstallSteamGame("730");
 
         Assert.Equal(new[] { "730" }, launcher.Launched);
+    }
+
+    [Fact]
+    public async Task UninstallSteamGameAsync_LaunchesTheLauncherAndWaitsForTheGameToDisappear()
+    {
+        WriteGame(Steam, "1", "GameOne", 10);
+        var launcher = new FakeLauncher();
+        var calls = 0;
+        var module = NewModule(steam: Steam, launcher: launcher, delay: (_, _) =>
+        {
+            calls++;
+            if (calls == 2) File.Delete(Path.Combine(Steam, "steamapps", "appmanifest_1.acf"));
+            return Task.CompletedTask;
+        });
+        await module.InitializeAsync();
+
+        var disappeared = await module.UninstallSteamGameAsync("1");
+
+        Assert.True(disappeared);
+        Assert.Equal(new[] { "1" }, launcher.Launched);
+    }
+
+    [Fact]
+    public async Task UninstallSteamGameAsync_GameNeverDisappears_ReturnsFalse()
+    {
+        WriteGame(Steam, "1", "GameOne", 10);
+        var module = NewModule(steam: Steam, delay: (_, _) => Task.CompletedTask);
+        await module.InitializeAsync();
+
+        Assert.False(await module.UninstallSteamGameAsync("1"));
     }
 }

@@ -446,13 +446,18 @@ public sealed partial class DiskAnalyzerView : Page
         Set(ModifiedHeader, "上次修改", DiskTreeColumn.Modified);
     }
 
-    private void OnUninstallClick(object sender, RoutedEventArgs e)
+    private async void OnUninstallClick(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: string appId }) return;
 
+        StatusText.Text = "已交给 Steam 处理，请在 Steam 的窗口中确认；完成后列表会自动刷新。";
         try
         {
-            _module.UninstallSteamGame(appId);
+            var gone = await _module.UninstallSteamGameAsync(appId);
+            await LoadGamesAsync(); // refreshes the games list and the orphan/workshop panels together
+            StatusText.Text = gone
+                ? "卸载完成，列表已刷新。"
+                : "Steam 还没有报告卸载完成（或者你取消了），列表保持原样，可以手动刷新。";
         }
         catch (Exception ex)
         {

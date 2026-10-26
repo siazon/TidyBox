@@ -19,13 +19,15 @@ public class DiskAnalyzerModule : IToolModule
     private readonly WorkshopResidueScanner _workshopScanner;
     private readonly ISteamAppNameLookup _steamAppCache;
     private readonly IRecycleBin _recycleBin;
+    private readonly Func<TimeSpan, CancellationToken, Task> _delay;
 
     public DiskAnalyzerModule(
         string? steamInstallPathOverride = null,
         string? snapshotDirectory = null,
         ISteamUninstallLauncher? steamUninstallLauncher = null,
         IRecycleBin? recycleBin = null,
-        ISteamAppNameLookup? steamAppCache = null)
+        ISteamAppNameLookup? steamAppCache = null,
+        Func<TimeSpan, CancellationToken, Task>? delay = null)
     {
         _steamInstallPathOverride = steamInstallPathOverride;
         _snapshotDirectory = snapshotDirectory
@@ -35,6 +37,7 @@ public class DiskAnalyzerModule : IToolModule
         _recycleBin = recycleBin ?? new ShellRecycleBin();
         _steamAppCache = steamAppCache ?? new SteamAppCache();
         _workshopScanner = new WorkshopResidueScanner(_steamAppCache);
+        _delay = delay ?? Task.Delay;
     }
 
     public string ModuleId => "disk-analyzer";
@@ -108,6 +111,34 @@ public class DiskAnalyzerModule : IToolModule
     }
 
     public void UninstallSteamGame(string appId) => _steamUninstallLauncher.LaunchUninstall(appId);
+
+    /// <summary>
+    /// Launches Steam's own uninstall confirmation, then waits (bounded, ~2 minutes) until the game disappears
+    /// from the library before returning, so the caller knows when it is safe to refresh the list. Opening the
+    /// URL only hands off to Steam's own window; the actual removal happens on Steam's own schedule afterwards.
+    /// </summary>
+    /// <returns>True if the game was confirmed gone; false if it is still there when the wait gives up.</returns>
+    public async Task<bool> UninstallSteamGameAsync(string appId, CancellationToken ct = default)
+    {
+        _steamUninstallLauncher.LaunchUninstall(appId);
+
+        bool IsGone() => !GetSteamGames().Any(g => g.AppId == appId);
+
+        const int maxAttempts = 40; // with the ~3s default interval, about 2 minutes total
+        for (var attempt = 0; attempt < maxAttempts && !IsGone(); attempt++)
+        {
+            try
+            {
+                await _delay(TimeSpan.FromSeconds(3), ct);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+
+        return IsGone();
+    }
 
     /// <summary>
     /// steamapps/workshop/content/&lt;appid&gt; folders for a game that is no longer installed; largest first.
