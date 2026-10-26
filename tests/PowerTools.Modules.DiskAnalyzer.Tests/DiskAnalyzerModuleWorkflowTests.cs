@@ -8,6 +8,9 @@ public class DiskAnalyzerModuleWorkflowTests : IDisposable
     private string Snapshots => Path.Combine(_root, "snapshots");
     private string Data => Path.Combine(_root, "data");
     private string Steam => Path.Combine(_root, "steam");
+    // GetSteamGames() writes through this instead of the real default SteamAppCache, which otherwise touches
+    // the real %LOCALAPPDATA% on whatever machine runs the tests.
+    private string CacheFile => Path.Combine(_root, "cache.json");
 
     public DiskAnalyzerModuleWorkflowTests()
     {
@@ -24,7 +27,8 @@ public class DiskAnalyzerModuleWorkflowTests : IDisposable
     }
 
     private DiskAnalyzerModule NewModule(string? steam = null, ISteamUninstallLauncher? launcher = null)
-        => new(steamInstallPathOverride: steam ?? @"C:\DoesNotExist", snapshotDirectory: Snapshots, steamUninstallLauncher: launcher);
+        => new(steamInstallPathOverride: steam ?? @"C:\DoesNotExist", snapshotDirectory: Snapshots, steamUninstallLauncher: launcher,
+            steamAppCache: new SteamAppCache(CacheFile));
 
     private void WriteData(string relativePath, int bytes)
     {

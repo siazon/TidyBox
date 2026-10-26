@@ -16,13 +16,16 @@ public class DiskAnalyzerModule : IToolModule
     private readonly DirectoryScanner _scanner = new();
     private readonly SteamLibraryParser _steamParser = new();
     private readonly OrphanFolderScanner _orphanScanner = new();
+    private readonly WorkshopResidueScanner _workshopScanner;
+    private readonly ISteamAppNameLookup _steamAppCache;
     private readonly IRecycleBin _recycleBin;
 
     public DiskAnalyzerModule(
         string? steamInstallPathOverride = null,
         string? snapshotDirectory = null,
         ISteamUninstallLauncher? steamUninstallLauncher = null,
-        IRecycleBin? recycleBin = null)
+        IRecycleBin? recycleBin = null,
+        ISteamAppNameLookup? steamAppCache = null)
     {
         _steamInstallPathOverride = steamInstallPathOverride;
         _snapshotDirectory = snapshotDirectory
@@ -30,6 +33,8 @@ public class DiskAnalyzerModule : IToolModule
         _steamUninstallLauncher = steamUninstallLauncher ?? new SteamUninstallLauncher();
         _snapshotStore = new SnapshotStore(_snapshotDirectory);
         _recycleBin = recycleBin ?? new ShellRecycleBin();
+        _steamAppCache = steamAppCache ?? new SteamAppCache();
+        _workshopScanner = new WorkshopResidueScanner(_steamAppCache);
     }
 
     public string ModuleId => "disk-analyzer";
@@ -75,16 +80,59 @@ public class DiskAnalyzerModule : IToolModule
     /// <summary>Installed Steam games across all library folders, largest first; empty when Steam is not available.</summary>
     public IReadOnlyList<SteamGameInfo> GetSteamGames()
     {
-        return GetLibraryFolders()
+        var games = GetLibraryFolders()
             .SelectMany(_steamParser.ParseLibrary)
             .GroupBy(game => game.AppId)
             .Select(group => group.First())
             .OrderByDescending(game => game.SizeBytes)
             .ThenBy(game => game.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
+
+        // Best-effort: remembers each game's name so it can still be shown later for leftover workshop content
+        // after the game itself is uninstalled. A cache write failure must never break the games list.
+        if (_steamAppCache is SteamAppCache cache)
+        {
+            foreach (var game in games)
+            {
+                try
+                {
+                    cache.Upsert(game.AppId, game.Name);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                }
+            }
+        }
+
+        return games;
     }
 
     public void UninstallSteamGame(string appId) => _steamUninstallLauncher.LaunchUninstall(appId);
+
+    /// <summary>
+    /// steamapps/workshop/content/&lt;appid&gt; folders for a game that is no longer installed; largest first.
+    /// Only reports candidates, never deletes anything. Empty when Steam is not available.
+    /// </summary>
+    public IReadOnlyList<WorkshopResidueItem> GetWorkshopResidues()
+    {
+        var installedAppIds = GetSteamGames().Select(g => g.AppId).ToList();
+        return _workshopScanner.Scan(GetLibraryFolders(), installedAppIds);
+    }
+
+    /// <summary>
+    /// Moves a workshop residue folder to the Recycle Bin. Re-checks that the folder is really under one of the
+    /// current Steam libraries' steamapps/workshop/content before touching it.
+    /// </summary>
+    public Task RemoveWorkshopResidueAsync(WorkshopResidueItem item, CancellationToken ct = default)
+    {
+        var allowedRoots = GetLibraryFolders().Select(lib => Path.Combine(lib, "steamapps", "workshop", "content"));
+        if (!allowedRoots.Any(root => IsDirectChildOf(item.FullPath, root)))
+        {
+            throw new ArgumentException($"'{item.FullPath}' is not under a known Steam library's steamapps/workshop/content.", nameof(item));
+        }
+
+        return Task.Run(() => _recycleBin.Delete(item.FullPath), ct);
+    }
 
     /// <summary>
     /// Folders under steamapps/common that no appmanifest points to any more; largest first. Only reports

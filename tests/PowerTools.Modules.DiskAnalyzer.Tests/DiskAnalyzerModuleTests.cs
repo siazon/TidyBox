@@ -6,10 +6,17 @@ namespace PowerTools.Modules.DiskAnalyzer.Tests;
 public class DiskAnalyzerModuleTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "pt-module-" + Guid.NewGuid());
+    // Any test that calls GetSteamGames()/GetWorkshopResidues() must inject this instead of the real default
+    // SteamAppCache, which otherwise writes to the real %LOCALAPPDATA% on whatever machine runs the tests.
+    private readonly string _cacheFile = Path.Combine(Path.GetTempPath(), "pt-module-cache-" + Guid.NewGuid() + ".json");
 
     public DiskAnalyzerModuleTests() => Directory.CreateDirectory(_dir);
 
-    public void Dispose() => Directory.Delete(_dir, recursive: true);
+    public void Dispose()
+    {
+        Directory.Delete(_dir, recursive: true);
+        if (File.Exists(_cacheFile)) File.Delete(_cacheFile);
+    }
 
     [Fact]
     public void ModuleId_And_DisplayName_MatchConvention()
@@ -137,6 +144,80 @@ public class DiskAnalyzerModuleTests : IDisposable
         var tampered = new OrphanGameFolder(_dir, "X", @"C:\Windows\System32", 0, DateTime.UtcNow);
 
         await Assert.ThrowsAsync<ArgumentException>(() => module.RemoveOrphanFolderAsync(tampered));
+        Assert.Empty(recycleBin.Deleted);
+    }
+
+    private static string MakeWorkshopFolder(string libraryDir, string appId)
+    {
+        var path = Path.Combine(libraryDir, "steamapps", "workshop", "content", appId);
+        Directory.CreateDirectory(path);
+        File.WriteAllBytes(Path.Combine(path, "mod.bin"), new byte[10]);
+        return path;
+    }
+
+    private static void WriteManifest(string libraryDir, string appId, string installDir)
+    {
+        const string template = """
+            "AppState"
+            {
+                "appid"		"__APPID__"
+                "name"		"__NAME__"
+                "installdir"		"__NAME__"
+                "SizeOnDisk"		"1"
+                "LastUpdated"		"1700000000"
+            }
+            """;
+        var content = template.Replace("__APPID__", appId).Replace("__NAME__", installDir);
+        Directory.CreateDirectory(Path.Combine(libraryDir, "steamapps", "common", installDir));
+        File.WriteAllText(Path.Combine(libraryDir, "steamapps", $"appmanifest_{appId}.acf"), content);
+    }
+
+    [Fact]
+    public async Task GetWorkshopResidues_GameNotInstalled_IsReported()
+    {
+        var workshop = MakeWorkshopFolder(_dir, "1");
+        var module = new DiskAnalyzerModule(steamInstallPathOverride: _dir, steamAppCache: new SteamAppCache(_cacheFile));
+        await module.InitializeAsync();
+
+        var residues = module.GetWorkshopResidues();
+
+        Assert.Equal(workshop, Assert.Single(residues).FullPath);
+    }
+
+    [Fact]
+    public async Task GetWorkshopResidues_GameStillInstalled_IsExcluded()
+    {
+        WriteManifest(_dir, "1", "GameOne");
+        MakeWorkshopFolder(_dir, "1");
+        var module = new DiskAnalyzerModule(steamInstallPathOverride: _dir, steamAppCache: new SteamAppCache(_cacheFile));
+        await module.InitializeAsync();
+
+        Assert.Empty(module.GetWorkshopResidues());
+    }
+
+    [Fact]
+    public async Task RemoveWorkshopResidueAsync_PathUnderCurrentLibrary_DeletesThroughRecycleBin()
+    {
+        var workshop = MakeWorkshopFolder(_dir, "1");
+        var recycleBin = new FakeRecycleBin();
+        var module = new DiskAnalyzerModule(steamInstallPathOverride: _dir, recycleBin: recycleBin, steamAppCache: new SteamAppCache(_cacheFile));
+        await module.InitializeAsync();
+        var item = Assert.Single(module.GetWorkshopResidues());
+
+        await module.RemoveWorkshopResidueAsync(item);
+
+        Assert.Equal(new[] { workshop }, recycleBin.Deleted);
+    }
+
+    [Fact]
+    public async Task RemoveWorkshopResidueAsync_PathNotUnderAnyKnownLibrary_IsRejectedWithoutCallingRecycleBin()
+    {
+        var recycleBin = new FakeRecycleBin();
+        var module = new DiskAnalyzerModule(steamInstallPathOverride: _dir, recycleBin: recycleBin);
+        await module.InitializeAsync();
+        var tampered = new WorkshopResidueItem(_dir, "1", null, @"C:\Windows\System32", 0);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => module.RemoveWorkshopResidueAsync(tampered));
         Assert.Empty(recycleBin.Deleted);
     }
 }
