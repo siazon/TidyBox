@@ -138,6 +138,7 @@
                     <Button Content="管理隔离区" Click="OnManageQuarantineClick"
                             ToolTipService.ToolTip="查看需要管理员权限才能删除的残留占用了多少空间，并可以清空" />
                     <TextBlock x:Name="RecycleBinUsageText" Opacity="0.7" VerticalAlignment="Center" />
+                    <ProgressBar x:Name="RecycleBinUsageBar" Width="80" Minimum="0" Maximum="100" Height="6" VerticalAlignment="Center" />
                 </StackPanel>
             </StackPanel>
         </Border>

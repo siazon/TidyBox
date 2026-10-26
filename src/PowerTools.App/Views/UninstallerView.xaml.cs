@@ -507,10 +507,14 @@ public sealed partial class UninstallerView : Page
             RecycleBinUsageText.Text = usage.ItemCount == 0
                 ? "回收站是空的"
                 : $"回收站当前占用 {ByteSizeFormatter.Format(usage.TotalBytes)}（{usage.ItemCount} 项）";
+
+            var totalCapacity = DiskCapacityHelper.TotalFixedDriveBytes();
+            RecycleBinUsageBar.Value = totalCapacity > 0 ? Math.Clamp(usage.TotalBytes * 100.0 / totalCapacity, 0, 100) : 0;
         }
         catch (Exception)
         {
             RecycleBinUsageText.Text = ""; // not critical; the button still works without this hint
+            RecycleBinUsageBar.Value = 0;
         }
     }
 
