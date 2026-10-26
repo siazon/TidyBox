@@ -8,23 +8,34 @@ public sealed class MenuRow : INotifyPropertyChanged
 {
     private MenuEntry? _entry;
 
-    private MenuRow(MenuEntry? entry, string title)
+    private MenuRow(MenuEntry? entry, string title, string groupKey = "", bool isExpanded = true)
     {
         _entry = entry;
         Title = title;
+        GroupKey = groupKey;
+        IsExpanded = isExpanded;
     }
 
     public MenuRow(MenuEntry entry) : this(entry, entry.DisplayName)
     {
     }
 
-    public static MenuRow Header(string title) => new(null, title);
+    /// <param name="groupKey">Stable identifier (not the display text) the view uses to remember collapsed state.</param>
+    public static MenuRow Header(string title, string groupKey, bool isExpanded) => new(null, title, groupKey, isExpanded);
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public bool IsHeader => _entry is null;
 
     public string Title { get; }
+
+    /// <summary>Only meaningful for a header row; which category it toggles.</summary>
+    public string GroupKey { get; }
+
+    /// <summary>Only meaningful for a header row; whether this category's entries are currently shown.</summary>
+    public bool IsExpanded { get; }
+
+    public string ExpanderGlyph => IsExpanded ? "" : ""; // ChevronDown / ChevronRight
 
     public MenuEntry? Entry => _entry;
 

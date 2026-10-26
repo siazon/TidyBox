@@ -89,8 +89,15 @@
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="local:MenuRow">
                     <Grid>
-                        <TextBlock Text="{x:Bind Title}" FontWeight="SemiBold" Margin="0,12,0,4"
-                                   Visibility="{x:Bind local:ContextMenuView.Show(IsHeader)}" />
+                        <Button Tag="{x:Bind GroupKey}" Click="OnHeaderRowClick"
+                                Visibility="{x:Bind local:ContextMenuView.Show(IsHeader)}"
+                                Background="Transparent" BorderThickness="0" Padding="0" Margin="0,12,0,4"
+                                HorizontalAlignment="Stretch" HorizontalContentAlignment="Left">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon FontSize="10" Glyph="{x:Bind ExpanderGlyph}" />
+                                <TextBlock Text="{x:Bind Title}" FontWeight="SemiBold" />
+                            </StackPanel>
+                        </Button>
 
                         <Grid ColumnSpacing="12" Visibility="{x:Bind local:ContextMenuView.ShowNot(IsHeader)}">
                             <Grid.ColumnDefinitions>

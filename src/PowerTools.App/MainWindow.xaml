@@ -6,7 +6,9 @@
     <!-- NavigationView does not reliably re-theme its own background when RequestedTheme is set on it directly
          (confirmed WinUI bug, microsoft/microsoft-ui-xaml#6938); the theme is set on this wrapping Grid instead. -->
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="True">
+        <!-- PaneDisplayMode="Left" (instead of the default "Auto") makes the existing hamburger toggle button
+             collapse the pane to an icon-only strip on click, rather than hiding it as an overlay. -->
+        <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="True" PaneDisplayMode="Left">
             <Frame x:Name="ContentFrame" />
         </NavigationView>
     </Grid>

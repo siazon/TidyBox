@@ -11,6 +11,7 @@ public sealed partial class ContextMenuView : Page
 {
     private ContextMenuModule _module = null!;
     private List<MenuRow> _entryRows = new();
+    private readonly HashSet<string> _collapsedGroups = new();
 
     public ContextMenuView()
     {
@@ -52,12 +53,21 @@ public sealed partial class ContextMenuView : Page
         var rows = new List<MenuRow>();
         foreach (var group in shown.GroupBy(row => row.Entry!.Location))
         {
-            rows.Add(MenuRow.Header($"{group.Key.DisplayName()}（{group.Count()}）"));
-            rows.AddRange(group);
+            var groupKey = group.Key.ToString();
+            var isExpanded = !_collapsedGroups.Contains(groupKey);
+            rows.Add(MenuRow.Header($"{group.Key.DisplayName()}（{group.Count()}）", groupKey, isExpanded));
+            if (isExpanded) rows.AddRange(group);
         }
 
         MenuList.ItemsSource = rows;
         UpdateStatus(shown.Count);
+    }
+
+    private void OnHeaderRowClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string groupKey }) return;
+        if (!_collapsedGroups.Remove(groupKey)) _collapsedGroups.Add(groupKey);
+        Rebuild();
     }
 
     private void UpdateStatus(int? shownCount = null)
