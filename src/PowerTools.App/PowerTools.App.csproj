@@ -36,6 +36,8 @@
     <!-- PNG assets are picked up by default; SVG and ICO are not. The icon is shown next to the Explorer right-click entries. -->
     <Content Include="Assets\app-placeholder.svg" />
     <Content Include="Assets\PowerTools.ico" />
+    <!-- Shown from the Settings page; lives at the repo root, not under this project, so it needs an explicit Link. -->
+    <Content Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

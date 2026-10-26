@@ -52,6 +52,13 @@ public sealed partial class MainWindow : Window
         BringToFront();
     }
 
+    /// <summary>Switches the nav to the module's own page; used by Settings to link out to a module's existing controls.</summary>
+    public void NavigateToModule(string moduleId)
+    {
+        var item = Nav.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(i => i.IsEnabled && i.Tag as string == moduleId);
+        if (item is not null) Nav.SelectedItem = item;
+    }
+
     private void BringToFront()
     {
         if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter) presenter.Restore();
@@ -105,6 +112,12 @@ public sealed partial class MainWindow : Window
 
     private void OnSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
+        if (args.IsSettingsSelected)
+        {
+            ContentFrame.Navigate(typeof(SettingsView), _registry);
+            return;
+        }
+
         if (args.SelectedItem is not NavigationViewItem item) return;
 
         var module = item.Tag is string id ? _registry.GetById(id) : null;
