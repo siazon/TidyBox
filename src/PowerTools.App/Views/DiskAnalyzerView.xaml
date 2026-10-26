@@ -157,11 +157,15 @@
             <PivotItem x:Name="SteamTab" Header="Steam 游戏">
                 <Grid RowSpacing="8">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <ListView x:Name="GamesList" Grid.Row="0" SelectionMode="None">
+                    <Button Grid.Row="0" Content="刷新" HorizontalAlignment="Left" Click="OnRefreshSteamClick"
+                            ToolTipService.ToolTip="重新扫描游戏库、孤儿目录和创意工坊残留；卸载后一般会自动刷新，这里可以手动再刷一次" />
+
+                    <ListView x:Name="GamesList" Grid.Row="1" SelectionMode="None">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="local:GameRow">
                                 <Grid ColumnSpacing="12">
@@ -178,7 +182,7 @@
                         </ListView.ItemTemplate>
                     </ListView>
 
-                    <StackPanel Grid.Row="1" Spacing="8">
+                    <StackPanel Grid.Row="2" Spacing="8">
                         <TextBlock x:Name="OrphanCleanText" Visibility="Collapsed" Opacity="0.7" FontSize="12"
                                    Text="✓ 已检查 steamapps\common，未发现孤儿目录" />
                         <Border x:Name="OrphanPanel" Visibility="Collapsed" Padding="16,12" CornerRadius="6" BorderThickness="1"

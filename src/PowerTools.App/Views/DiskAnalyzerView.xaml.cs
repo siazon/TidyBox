@@ -141,6 +141,8 @@ public sealed partial class DiskAnalyzerView : Page
         _ = ScanAsync(path);
     }
 
+    private void OnRefreshSteamClick(object sender, RoutedEventArgs e) => _ = LoadGamesAsync();
+
     private async Task LoadGamesAsync()
     {
         try
