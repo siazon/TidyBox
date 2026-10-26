@@ -16,6 +16,14 @@ public sealed partial class MainWindow : Window
         ["uninstaller"] = typeof(UninstallerView),
     };
 
+    // Segoe Fluent Icons glyphs for the nav items; a module without an entry just shows no icon.
+    private static readonly Dictionary<string, string> ModuleIcons = new()
+    {
+        ["disk-analyzer"] = "\uEDA2", // HardDrive
+        ["context-menu"] = "\uF2C7",  // BulletedList2
+        ["uninstaller"] = "\uEC91",   // Uninstall
+    };
+
     private readonly ModuleRegistry _registry;
 
     public MainWindow(ModuleRegistry registry)
@@ -67,7 +75,9 @@ public sealed partial class MainWindow : Window
             try
             {
                 await module.InitializeAsync();
-                Nav.MenuItems.Add(new NavigationViewItem { Content = module.DisplayName, Tag = module.ModuleId });
+                var item = new NavigationViewItem { Content = module.DisplayName, Tag = module.ModuleId };
+                if (ModuleIcons.TryGetValue(module.ModuleId, out var glyph)) item.Icon = new FontIcon { Glyph = glyph };
+                Nav.MenuItems.Add(item);
             }
             catch (Exception ex)
             {
@@ -76,6 +86,7 @@ public sealed partial class MainWindow : Window
                     Content = $"{module.DisplayName} (failed to load)",
                     Tag = ex.Message,
                     IsEnabled = false,
+                    Icon = new FontIcon { Glyph = "\uE7BA" }, // Warning
                 };
                 ToolTipService.SetToolTip(failed, ex.Message);
                 Nav.MenuItems.Add(failed);
