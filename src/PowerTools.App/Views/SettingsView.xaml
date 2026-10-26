@@ -27,7 +27,7 @@
                         <Button x:Name="PurgeQuarantineButton" Grid.Column="1" VerticalAlignment="Top" Click="OnPurgeQuarantineClick">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <FontIcon Glyph="&#xE74D;" FontSize="14" />
-                                <TextBlock Text="清空隔离区" />
+                                <TextBlock Text="查看/清空隔离区" />
                             </StackPanel>
                         </Button>
                     </Grid>

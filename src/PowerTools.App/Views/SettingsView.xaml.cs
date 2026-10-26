@@ -33,7 +33,10 @@ public sealed partial class SettingsView : Page
             _ => 0,
         };
 
-        _ = LoadQuarantineUsageAsync();
+        // Querying the quarantine folder's usage requires admin rights (it is locked to Administrators/SYSTEM), so
+        // it is not loaded automatically here — that would mean a UAC prompt just from opening Settings. It is only
+        // queried when the user clicks "清空隔离区" below. The Recycle Bin needs no elevation, so that one does load.
+        QuarantineUsageText.Text = "点击“清空隔离区”查看占用并清空（需要管理员权限）";
         _ = LoadRecycleBinUsageAsync();
     }
 
@@ -52,21 +55,6 @@ public sealed partial class SettingsView : Page
         }
     }
 
-    private async Task LoadQuarantineUsageAsync()
-    {
-        try
-        {
-            var summary = await _uninstaller.InspectQuarantineAsync();
-            QuarantineUsageText.Text = summary.BatchCount == 0
-                ? "隔离区是空的"
-                : $"隔离区当前占用 {ByteSizeFormatter.Format(summary.TotalBytes)}（{summary.BatchCount} 次清理）";
-        }
-        catch (Exception)
-        {
-            QuarantineUsageText.Text = ""; // not critical; the button still works without this hint
-        }
-    }
-
     private async Task LoadRecycleBinUsageAsync()
     {
         try
@@ -82,20 +70,47 @@ public sealed partial class SettingsView : Page
         }
     }
 
+    // Inspecting the quarantine folder needs admin rights, so the only UAC prompt for this whole flow happens
+    // right here, after the user explicitly asked to manage it — never automatically on page load.
     private async void OnPurgeQuarantineClick(object sender, RoutedEventArgs e)
     {
+        PurgeQuarantineButton.IsEnabled = false;
+        QuarantineSummary summary;
+        try
+        {
+            summary = await _uninstaller.InspectQuarantineAsync();
+        }
+        catch (Exception ex)
+        {
+            QuarantineUsageText.Text = $"查看隔离区失败：{ex.Message}";
+            PurgeQuarantineButton.IsEnabled = true;
+            return;
+        }
+
+        if (summary.BatchCount == 0)
+        {
+            QuarantineUsageText.Text = "隔离区是空的。";
+            PurgeQuarantineButton.IsEnabled = true;
+            return;
+        }
+
+        QuarantineUsageText.Text = $"隔离区当前占用 {ByteSizeFormatter.Format(summary.TotalBytes)}（{summary.BatchCount} 次清理）";
+
         var confirm = new ContentDialog
         {
             Title = "清空隔离区？",
-            Content = "隔离区里是之前清理残留时移进来、需要管理员权限才能删除的文件。清空后无法恢复，确定要清空吗？",
+            Content = $"隔离区里有 {summary.BatchCount} 次清理留下的内容，共占用 {ByteSizeFormatter.Format(summary.TotalBytes)}。\n\n清空后无法恢复，确定要清空吗？",
             PrimaryButtonText = "清空隔离区",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = XamlRoot,
         };
-        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+        if (await confirm.ShowAsync() != ContentDialogResult.Primary)
+        {
+            PurgeQuarantineButton.IsEnabled = true;
+            return;
+        }
 
-        PurgeQuarantineButton.IsEnabled = false;
         try
         {
             var success = await _uninstaller.PurgeQuarantineAsync();
@@ -109,8 +124,6 @@ public sealed partial class SettingsView : Page
         {
             PurgeQuarantineButton.IsEnabled = true;
         }
-
-        await LoadQuarantineUsageAsync();
     }
 
     private async void OnEmptyRecycleBinClick(object sender, RoutedEventArgs e)
