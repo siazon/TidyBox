@@ -145,7 +145,7 @@ public class DiskAnalyzerModule : IToolModule
 
         bool IsGone() => !_steamAppStillRegistered(appId);
 
-        const int maxAttempts = 40; // with the ~3s default interval, about 2 minutes total
+        const int maxAttempts = 200; // with the ~3s default interval, about 10 minutes total (large games can take a while to delete)
         for (var attempt = 0; attempt < maxAttempts && !IsGone(); attempt++)
         {
             try

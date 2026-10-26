@@ -253,7 +253,7 @@ public sealed partial class UninstallerView : Page
 
             if (result.Leftovers.Count > 0) ShowResidue(app, result.Leftovers);
             deferred = result.DeferredScan;
-            if (deferred is not null) StatusText.Text = "卸载程序还在后台进行，完成后会自动检查残留（最多等 2 分钟）。";
+            if (deferred is not null) StatusText.Text = "卸载程序还在后台进行，完成后会自动检查残留（最多等 10 分钟）。";
         }
         catch (Exception ex)
         {

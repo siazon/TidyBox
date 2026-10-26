@@ -123,7 +123,7 @@ public sealed class UninstallerModule : IToolModule
     // files, so there is nothing to scan for them — the wait itself is still useful so the caller knows to refresh).
     private async Task<IReadOnlyList<ResidueItem>> ScanWhenFinishedAsync(InstalledApp app, ResidueSnapshot? before, CancellationToken ct)
     {
-        var limits = _watchOptions with { MaxDuration = TimeSpan.FromMinutes(2) };
+        var limits = _watchOptions with { MaxDuration = TimeSpan.FromMinutes(10) }; // large games/installers can take a while to actually finish
         if (!await LeftoverWatcher.WaitUntilAsync(() => IsInstalled(app) != true, limits, _delay, ct)) return Array.Empty<ResidueItem>();
         if (before is null) return Array.Empty<ResidueItem>();
 
