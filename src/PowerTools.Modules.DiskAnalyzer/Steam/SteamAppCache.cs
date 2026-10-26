@@ -2,12 +2,18 @@ using System.Text.Json;
 
 namespace PowerTools.Modules.DiskAnalyzer.Steam;
 
+/// <summary>Looks up a game's name by appid; implemented by <see cref="SteamAppCache"/>, fakeable in tests.</summary>
+public interface ISteamAppNameLookup
+{
+    string? TryGetName(string appId);
+}
+
 /// <summary>
 /// Remembers appid -> game name across sessions, so a game's name can still be shown after it has been
 /// uninstalled and its appmanifest is gone (e.g. for leftover workshop content). Local-only JSON file, not synced
 /// or uploaded anywhere. A missing or corrupt file is treated as an empty cache rather than failing the caller.
 /// </summary>
-public sealed class SteamAppCache
+public sealed class SteamAppCache : ISteamAppNameLookup
 {
     private readonly string _filePath;
     private readonly object _gate = new();
