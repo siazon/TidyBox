@@ -88,8 +88,10 @@ public class DiskAnalyzerModuleTests : IDisposable
     {
         public List<string> Deleted = new();
         public int EmptyCalls;
+        public PowerTools.Core.Recycling.RecycleBinUsage Usage = new(0, 0);
         public void Delete(string folderPath) => Deleted.Add(folderPath);
         public void Empty() => EmptyCalls++;
+        public PowerTools.Core.Recycling.RecycleBinUsage GetUsage() => Usage;
     }
 
     private static string MakeGhostFolder(string libraryDir)
@@ -232,5 +234,17 @@ public class DiskAnalyzerModuleTests : IDisposable
         await module.EmptyRecycleBinAsync();
 
         Assert.Equal(1, recycleBin.EmptyCalls);
+    }
+
+    [Fact]
+    public async Task GetRecycleBinUsageAsync_ReturnsTheRecycleBinsUsage()
+    {
+        var recycleBin = new FakeRecycleBin { Usage = new PowerTools.Core.Recycling.RecycleBinUsage(12345, 3) };
+        var module = new DiskAnalyzerModule(steamInstallPathOverride: _dir, recycleBin: recycleBin);
+
+        var usage = await module.GetRecycleBinUsageAsync();
+
+        Assert.Equal(12345, usage.TotalBytes);
+        Assert.Equal(3, usage.ItemCount);
     }
 }

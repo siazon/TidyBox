@@ -166,6 +166,9 @@ public sealed class UninstallerModule : IToolModule
     /// <summary>Empties the Recycle Bin (on every drive), so folders moved there by a previous removal are actually freed.</summary>
     public Task EmptyRecycleBinAsync(CancellationToken ct = default) => Task.Run(_recycleBin.Empty, ct);
 
+    /// <summary>How much the Recycle Bin (every drive) currently holds, so the user can decide whether to empty it.</summary>
+    public Task<RecycleBinUsage> GetRecycleBinUsageAsync(CancellationToken ct = default) => Task.Run(_recycleBin.GetUsage, ct);
+
     /// <summary>How much the quarantine folder (admin-only residue removals) is currently holding.</summary>
     public async Task<QuarantineSummary> InspectQuarantineAsync(CancellationToken ct = default)
     {

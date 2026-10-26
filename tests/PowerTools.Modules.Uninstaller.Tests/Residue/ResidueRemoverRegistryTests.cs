@@ -26,6 +26,7 @@ public sealed class ResidueRemoverRegistryTests : IDisposable
     {
         public void Delete(string folderPath) { }
         public void Empty() { }
+        public RecycleBinUsage GetUsage() => new(0, 0);
     }
 
     private sealed class FakeElevation : IElevationClient

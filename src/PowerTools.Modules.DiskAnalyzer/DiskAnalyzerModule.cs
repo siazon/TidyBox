@@ -137,6 +137,9 @@ public class DiskAnalyzerModule : IToolModule
     /// <summary>Empties the Recycle Bin (on every drive), so folders moved there by a previous removal are actually freed.</summary>
     public Task EmptyRecycleBinAsync(CancellationToken ct = default) => Task.Run(_recycleBin.Empty, ct);
 
+    /// <summary>How much the Recycle Bin (every drive) currently holds, so the user can decide whether to empty it.</summary>
+    public Task<RecycleBinUsage> GetRecycleBinUsageAsync(CancellationToken ct = default) => Task.Run(_recycleBin.GetUsage, ct);
+
     /// <summary>
     /// Folders under steamapps/common that no appmanifest points to any more; largest first. Only reports
     /// candidates, never deletes anything. Empty when Steam is not available.

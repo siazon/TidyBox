@@ -28,9 +28,11 @@ public sealed class UninstallerModuleTests : IDisposable
     {
         public List<string> Deleted = new();
         public int EmptyCalls;
+        public RecycleBinUsage Usage = new(0, 0);
 
         public void Delete(string folderPath) => Deleted.Add(folderPath);
         public void Empty() => EmptyCalls++;
+        public RecycleBinUsage GetUsage() => Usage;
     }
 
     private sealed class NoElevation : IElevationClient
@@ -304,6 +306,17 @@ public sealed class UninstallerModuleTests : IDisposable
         await Module().EmptyRecycleBinAsync();
 
         Assert.Equal(1, _bin.EmptyCalls);
+    }
+
+    [Fact]
+    public async Task GetRecycleBinUsageAsync_ReturnsTheRecycleBinsUsage()
+    {
+        _bin.Usage = new RecycleBinUsage(999, 2);
+
+        var usage = await Module().GetRecycleBinUsageAsync();
+
+        Assert.Equal(999, usage.TotalBytes);
+        Assert.Equal(2, usage.ItemCount);
     }
 
     [Fact]
