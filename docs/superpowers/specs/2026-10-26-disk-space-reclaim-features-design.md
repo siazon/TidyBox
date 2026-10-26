@@ -3,7 +3,7 @@
 日期：2026-10-26
 背景：现有 `ResidueRemover`（普通残留走回收站，管理员残留走 `ElevatedHelper` 隔离区）在用户感知上"清理了"，但**磁盘实际占用在清空回收站/隔离区之前不会变化**——这是本次新功能群的前提修复项，必须先解决，否则新功能会继承同样的误导。
 
-来源依据：见 `docs/superpowers/specs/2026-10-25-...`（已有卸载模块 spike）+ 本次 Reddit 数据分析（workshop 残留 20 帖 / 孤儿目录 36 帖 / 批量卸载 14 帖，均在对话记录中）。
+来源依据：见 `docs/superpowers/specs/2026-10-25-...`（已有卸载模块 spike）+ 本次 Reddit 数据分析（workshop 残留 20 帖 / 孤儿目录 36 帖 / 批量卸载 14 帖），原始查询词、帖子链接和搜索结果全文见 `docs/superpowers/specs/2026-10-26-disk-space-reclaim-reddit-research-raw.md`。
 
 ---
 
