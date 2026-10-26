@@ -4,7 +4,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:PowerTools.App.Views"
     AllowDrop="True" DragOver="OnDragOver" Drop="OnDrop"
-    xmlns:model="using:PowerTools.Modules.Uninstaller.Model">
+    xmlns:model="using:PowerTools.Modules.Uninstaller.Model"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
     <Page.Resources>
         <!-- Shown for apps whose own icon cannot be found. -->

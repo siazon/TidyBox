@@ -67,6 +67,17 @@ public partial class App : Application
         _window = main;
         CurrentWindow = main;
 
+        // Apply the saved theme before the window is shown, so it never starts in one theme and flips to another later.
+        if (main.Content is FrameworkElement root)
+        {
+            root.RequestedTheme = (Windows.Storage.ApplicationData.Current.LocalSettings.Values["Theme"] as string) switch
+            {
+                "Light" => ElementTheme.Light,
+                "Dark" => ElementTheme.Dark,
+                _ => ElementTheme.Default,
+            };
+        }
+
         _analyzeRequests = new AnalyzeRequestListener(AnalyzeRequestListener.DefaultPipeName, path =>
         {
             if (Path.IsPathFullyQualified(path)) main.DispatcherQueue.TryEnqueue(() => main.OpenInDiskAnalyzer(path));

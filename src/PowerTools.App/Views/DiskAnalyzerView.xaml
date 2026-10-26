@@ -3,7 +3,8 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:PowerTools.App.Views"
-    xmlns:tree="using:PowerTools.Modules.DiskAnalyzer.Tree">
+    xmlns:tree="using:PowerTools.Modules.DiskAnalyzer.Tree"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
 
     <Page.Resources>
         <LinearGradientBrush x:Key="FolderBarBrush" StartPoint="0,0" EndPoint="1,0">
