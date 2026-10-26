@@ -37,8 +37,18 @@
             <ProgressRing x:Name="BusyRing" Grid.Column="3" IsActive="False" Width="20" Height="20" />
         </Grid>
 
-        <TextBlock x:Name="StatusText" Grid.Row="1" TextWrapping="Wrap"
-                   Text="输入文件夹路径后点击“扫描”，或点击“浏览…”选择文件夹。" />
+        <Grid Grid.Row="1" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="StatusText" TextWrapping="Wrap"
+                       Text="输入文件夹路径后点击“扫描”，或点击“浏览…”选择文件夹。" />
+            <TextBlock x:Name="RecycleBinUsageText" Grid.Column="1" Opacity="0.7" VerticalAlignment="Center" />
+            <Button x:Name="EmptyRecycleBinButton" Grid.Column="2" Content="清空回收站" Click="OnEmptyRecycleBinClick"
+                    ToolTipService.ToolTip="移到回收站的文件在这里之前不会真正释放磁盘空间；清空回收站会清空整台机器的回收站，不止这次删除的内容" />
+        </Grid>
 
         <Pivot x:Name="MainPivot" Grid.Row="2">
             <PivotItem Header="文件夹">
@@ -246,9 +256,6 @@
                                 </StackPanel>
                             </StackPanel>
                         </Border>
-
-                        <Button Content="清空回收站" Click="OnEmptyRecycleBinClick" HorizontalAlignment="Left"
-                                ToolTipService.ToolTip="移到回收站的文件在这里之前不会真正释放磁盘空间；清空回收站会清空整台机器的回收站，不止这次删除的内容" />
                     </StackPanel>
                 </Grid>
             </PivotItem>

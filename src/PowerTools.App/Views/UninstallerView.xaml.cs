@@ -367,6 +367,7 @@ public sealed partial class UninstallerView : Page
         ResidueList.ItemsSource = leftovers.Select(item => new ResidueRow(item)).ToList();
         ResidueResult.Visibility = Visibility.Collapsed;
         ResiduePanel.Visibility = Visibility.Visible;
+        _ = LoadRecycleBinUsageAsync();
     }
 
     // The uninstaller handed over to a background process: wait (bounded, and without blocking the buttons) until the
@@ -407,6 +408,7 @@ public sealed partial class UninstallerView : Page
         ResidueList.ItemsSource = leftovers.Select(item => new ResidueRow(item)).ToList();
         ResidueResult.Visibility = Visibility.Collapsed;
         ResiduePanel.Visibility = Visibility.Visible;
+        _ = LoadRecycleBinUsageAsync();
 
         // Some uninstallers keep deleting after they say "done": the list drops what disappears on its own (a minute at most).
         _watching?.Cancel();
@@ -489,6 +491,21 @@ public sealed partial class UninstallerView : Page
         ResiduePanel.Visibility = Visibility.Collapsed;
     }
 
+    private async Task LoadRecycleBinUsageAsync()
+    {
+        try
+        {
+            var usage = await _module.GetRecycleBinUsageAsync();
+            RecycleBinUsageText.Text = usage.ItemCount == 0
+                ? "回收站是空的"
+                : $"回收站当前占用 {ByteSizeFormatter.Format(usage.TotalBytes)}（{usage.ItemCount} 项）";
+        }
+        catch (Exception)
+        {
+            RecycleBinUsageText.Text = ""; // not critical; the button still works without this hint
+        }
+    }
+
     private async void OnEmptyRecycleBinClick(object sender, RoutedEventArgs e)
     {
         var confirm = new ContentDialog
@@ -511,6 +528,8 @@ public sealed partial class UninstallerView : Page
         {
             StatusText.Text = $"清空回收站失败：{ex.Message}";
         }
+
+        await LoadRecycleBinUsageAsync();
     }
 
     private async void OnManageQuarantineClick(object sender, RoutedEventArgs e)

@@ -112,8 +112,24 @@ public sealed partial class DiskAnalyzerView : Page
     {
         _module = (DiskAnalyzerModule)e.Parameter;
         _ = LoadGamesAsync();
+        _ = LoadRecycleBinUsageAsync();
 
         ScanPendingPath();
+    }
+
+    private async Task LoadRecycleBinUsageAsync()
+    {
+        try
+        {
+            var usage = await _module.GetRecycleBinUsageAsync();
+            RecycleBinUsageText.Text = usage.ItemCount == 0
+                ? "回收站是空的"
+                : $"回收站当前占用 {ByteSizeFormatter.Format(usage.TotalBytes)}（{usage.ItemCount} 项）";
+        }
+        catch (Exception)
+        {
+            RecycleBinUsageText.Text = ""; // not critical; the button still works without this hint
+        }
     }
 
     /// <summary>Started from the right-click menu: scans the folder it asked for, if any.</summary>
@@ -321,6 +337,8 @@ public sealed partial class DiskAnalyzerView : Page
         {
             StatusText.Text = $"清空回收站失败：{ex.Message}";
         }
+
+        await LoadRecycleBinUsageAsync();
     }
 
     private async void OnBrowseClick(object sender, RoutedEventArgs e)
