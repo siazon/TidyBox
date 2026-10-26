@@ -138,7 +138,16 @@
                     <Button Content="管理隔离区" Click="OnManageQuarantineClick"
                             ToolTipService.ToolTip="查看需要管理员权限才能删除的残留占用了多少空间，并可以清空" />
                     <TextBlock x:Name="RecycleBinUsageText" Opacity="0.7" VerticalAlignment="Center" />
-                    <ProgressBar x:Name="RecycleBinUsageBar" Width="80" Minimum="0" Maximum="100" Height="6" VerticalAlignment="Center" />
+                    <Border Width="90" Height="10" CornerRadius="5" VerticalAlignment="Center"
+                            Background="{ThemeResource ControlFillColorSecondaryBrush}" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition x:Name="RecycleBinUsageBarFillColumn" Width="0*" />
+                                <ColumnDefinition x:Name="RecycleBinUsageBarRestColumn" Width="100*" />
+                            </Grid.ColumnDefinitions>
+                            <Rectangle Grid.Column="0" Fill="{ThemeResource SystemFillColorCautionBrush}" RadiusX="5" RadiusY="5" />
+                        </Grid>
+                    </Border>
                 </StackPanel>
             </StackPanel>
         </Border>

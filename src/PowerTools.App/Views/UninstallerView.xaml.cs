@@ -504,18 +504,28 @@ public sealed partial class UninstallerView : Page
         try
         {
             var usage = await _module.GetRecycleBinUsageAsync();
+            var totalCapacity = DiskCapacityHelper.TotalFixedDriveBytes();
+            var percent = totalCapacity > 0 ? usage.TotalBytes * 100.0 / totalCapacity : 0;
+
             RecycleBinUsageText.Text = usage.ItemCount == 0
                 ? "回收站是空的"
-                : $"回收站当前占用 {ByteSizeFormatter.Format(usage.TotalBytes)}（{usage.ItemCount} 项）";
-
-            var totalCapacity = DiskCapacityHelper.TotalFixedDriveBytes();
-            RecycleBinUsageBar.Value = totalCapacity > 0 ? Math.Clamp(usage.TotalBytes * 100.0 / totalCapacity, 0, 100) : 0;
+                : $"回收站当前占用 {ByteSizeFormatter.Format(usage.TotalBytes)}（{usage.ItemCount} 项，占总磁盘空间 {percent:0.0}%）";
+            SetRecycleBinBar(percent);
         }
         catch (Exception)
         {
             RecycleBinUsageText.Text = ""; // not critical; the button still works without this hint
-            RecycleBinUsageBar.Value = 0;
+            SetRecycleBinBar(0);
         }
+    }
+
+    // A real percentage is almost always tiny next to total disk capacity; a floor keeps the bar visible as more
+    // than a sliver whenever there is anything at all, while RecycleBinUsageText still shows the exact number.
+    private void SetRecycleBinBar(double percent)
+    {
+        var display = percent > 0 ? Math.Clamp(Math.Max(percent, 2.0), 0, 100) : 0;
+        RecycleBinUsageBarFillColumn.Width = new GridLength(display, GridUnitType.Star);
+        RecycleBinUsageBarRestColumn.Width = new GridLength(100 - display, GridUnitType.Star);
     }
 
     private async void OnEmptyRecycleBinClick(object sender, RoutedEventArgs e)

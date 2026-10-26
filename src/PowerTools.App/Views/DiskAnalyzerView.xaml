@@ -47,7 +47,16 @@
             <TextBlock x:Name="StatusText" TextWrapping="Wrap"
                        Text="输入文件夹路径后点击“扫描”，或点击“浏览…”选择文件夹。" />
             <TextBlock x:Name="RecycleBinUsageText" Grid.Column="1" Opacity="0.7" VerticalAlignment="Center" />
-            <ProgressBar x:Name="RecycleBinUsageBar" Grid.Column="2" Minimum="0" Maximum="100" Height="6" VerticalAlignment="Center" />
+            <Border Grid.Column="2" Width="90" Height="10" CornerRadius="5" VerticalAlignment="Center"
+                    Background="{ThemeResource ControlFillColorSecondaryBrush}" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="RecycleBinUsageBarFillColumn" Width="0*" />
+                        <ColumnDefinition x:Name="RecycleBinUsageBarRestColumn" Width="100*" />
+                    </Grid.ColumnDefinitions>
+                    <Rectangle Grid.Column="0" Fill="{ThemeResource SystemFillColorCautionBrush}" RadiusX="5" RadiusY="5" />
+                </Grid>
+            </Border>
             <Button x:Name="EmptyRecycleBinButton" Grid.Column="3" Content="清空回收站" Click="OnEmptyRecycleBinClick"
                     ToolTipService.ToolTip="移到回收站的文件在这里之前不会真正释放磁盘空间；清空回收站会清空整台机器的回收站，不止这次删除的内容" />
         </Grid>
