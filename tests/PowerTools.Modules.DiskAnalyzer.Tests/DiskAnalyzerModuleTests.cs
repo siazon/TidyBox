@@ -87,7 +87,9 @@ public class DiskAnalyzerModuleTests : IDisposable
     private sealed class FakeRecycleBin : PowerTools.Core.Recycling.IRecycleBin
     {
         public List<string> Deleted = new();
+        public int EmptyCalls;
         public void Delete(string folderPath) => Deleted.Add(folderPath);
+        public void Empty() => EmptyCalls++;
     }
 
     private static string MakeGhostFolder(string libraryDir)

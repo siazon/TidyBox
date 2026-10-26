@@ -17,6 +17,8 @@ public sealed class ResidueRemoverTests : IDisposable
             if (Failures.TryGetValue(path, out var failure)) throw failure;
             Deleted.Add(path);
         }
+
+        public void Empty() { }
     }
 
     private sealed class FakeElevation : IElevationClient

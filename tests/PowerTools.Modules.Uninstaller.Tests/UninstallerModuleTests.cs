@@ -27,8 +27,10 @@ public sealed class UninstallerModuleTests : IDisposable
     private sealed class NoRecycleBin : IRecycleBin
     {
         public List<string> Deleted = new();
+        public int EmptyCalls;
 
         public void Delete(string folderPath) => Deleted.Add(folderPath);
+        public void Empty() => EmptyCalls++;
     }
 
     private sealed class NoElevation : IElevationClient
