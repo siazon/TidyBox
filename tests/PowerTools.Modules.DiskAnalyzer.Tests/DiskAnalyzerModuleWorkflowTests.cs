@@ -27,9 +27,9 @@ public class DiskAnalyzerModuleWorkflowTests : IDisposable
     }
 
     private DiskAnalyzerModule NewModule(string? steam = null, ISteamUninstallLauncher? launcher = null,
-        Func<TimeSpan, CancellationToken, Task>? delay = null, Func<string, bool>? steamAppStillRegistered = null)
+        Func<TimeSpan, CancellationToken, Task>? delay = null)
         => new(steamInstallPathOverride: steam ?? @"C:\DoesNotExist", snapshotDirectory: Snapshots, steamUninstallLauncher: launcher,
-            steamAppCache: new SteamAppCache(CacheFile), delay: delay, steamAppStillRegistered: steamAppStillRegistered);
+            steamAppCache: new SteamAppCache(CacheFile), delay: delay);
 
     private void WriteData(string relativePath, int bytes)
     {
@@ -200,13 +200,20 @@ public class DiskAnalyzerModuleWorkflowTests : IDisposable
     }
 
     [Fact]
-    public async Task UninstallSteamGameAsync_LaunchesTheLauncherAndWaitsForTheRegistryEntryToDisappear()
+    public async Task UninstallSteamGameAsync_LaunchesTheLauncherAndWaitsForTheGameToDisappearFromTheLibrary()
     {
+        // The exact same signal GetSteamGames() uses (the appmanifest file), so "gone" here always agrees with
+        // what a manual refresh would show.
+        WriteGame(Steam, "1", "GameOne", 10);
         var launcher = new FakeLauncher();
-        var checks = 0;
-        // Still there the first time (uninstall just started), gone from the second check onward.
-        var module = NewModule(launcher: launcher, delay: (_, _) => Task.CompletedTask,
-            steamAppStillRegistered: _ => ++checks < 2);
+        var calls = 0;
+        var module = NewModule(steam: Steam, launcher: launcher, delay: (_, _) =>
+        {
+            calls++;
+            if (calls == 2) File.Delete(Path.Combine(Steam, "steamapps", "appmanifest_1.acf"));
+            return Task.CompletedTask;
+        });
+        await module.InitializeAsync();
 
         var disappeared = await module.UninstallSteamGameAsync("1");
 
@@ -215,9 +222,11 @@ public class DiskAnalyzerModuleWorkflowTests : IDisposable
     }
 
     [Fact]
-    public async Task UninstallSteamGameAsync_RegistryEntryNeverDisappears_ReturnsFalse()
+    public async Task UninstallSteamGameAsync_GameNeverDisappears_ReturnsFalse()
     {
-        var module = NewModule(delay: (_, _) => Task.CompletedTask, steamAppStillRegistered: _ => true);
+        WriteGame(Steam, "1", "GameOne", 10);
+        var module = NewModule(steam: Steam, delay: (_, _) => Task.CompletedTask);
+        await module.InitializeAsync();
 
         Assert.False(await module.UninstallSteamGameAsync("1"));
     }
