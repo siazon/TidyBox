@@ -165,6 +165,8 @@ public sealed partial class UninstallerView : Page
 
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs e) => UninstallButton.IsEnabled = AppList.SelectedItem is AppRow;
 
+    private void OnRowCheckChanged(object sender, RoutedEventArgs e) => BatchUninstallButton.IsEnabled = _all.Any(row => row.IsChecked);
+
     private void OnRefreshClick(object sender, RoutedEventArgs e) => _ = LoadAsync();
 
     private void OnDragOver(object sender, DragEventArgs e)
@@ -277,6 +279,93 @@ public sealed partial class UninstallerView : Page
             XamlRoot = XamlRoot,
         };
         return await ask.ShowAsync() == ContentDialogResult.Primary;
+    }
+
+    private async void OnBatchUninstallClick(object sender, RoutedEventArgs e)
+    {
+        var chosen = _all.Where(row => row.IsChecked).ToList();
+        if (chosen.Count == 0)
+        {
+            StatusText.Text = "没有勾选任何要卸载的程序。";
+            return;
+        }
+
+        var knownTotal = chosen.Sum(row => row.SizeBytes ?? 0);
+        var unknownCount = chosen.Count(row => row.SizeBytes is null);
+        var sizeNote = unknownCount > 0
+            ? $"预计释放 {ByteSizeFormatter.Format(knownTotal)}（另有 {unknownCount} 项大小未知，不计入此数字）"
+            : $"预计释放 {ByteSizeFormatter.Format(knownTotal)}";
+
+        var confirm = new ContentDialog
+        {
+            Title = $"批量卸载 {chosen.Count} 个程序？",
+            Content = $"{string.Join("、", chosen.Take(5).Select(r => r.DisplayName))}{(chosen.Count > 5 ? " 等" : "")}\n\n{sizeNote}。\n\n会依次运行每个程序自带的卸载程序；需要管理员权限的会被跳过，之后可以单独用“以管理员身份重试”卸载。",
+            PrimaryButtonText = "批量卸载",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+
+        _watching?.Cancel();
+        ResiduePanel.Visibility = Visibility.Collapsed;
+        UninstallButton.IsEnabled = false;
+        BatchUninstallButton.IsEnabled = false;
+        RefreshButton.IsEnabled = false;
+
+        var succeeded = new List<string>();
+        var needsAdmin = new List<string>();
+        var failed = new List<string>();
+        var allLeftovers = new List<ResidueItem>();
+
+        foreach (var row in chosen)
+        {
+            StatusText.Text = $"正在卸载“{row.DisplayName}”…（{succeeded.Count + needsAdmin.Count + failed.Count + 1}/{chosen.Count}）";
+            try
+            {
+                var result = await _module.UninstallAsync(row.App);
+                if (result.Outcome.NeedsAdministrator)
+                {
+                    needsAdmin.Add(row.DisplayName);
+                }
+                else if (result.Outcome.Status == UninstallStatus.Completed)
+                {
+                    succeeded.Add(row.DisplayName);
+                    allLeftovers.AddRange(result.Leftovers);
+                }
+                else
+                {
+                    failed.Add($"{row.DisplayName}（{result.Outcome.Message}）");
+                }
+            }
+            catch (Exception ex)
+            {
+                failed.Add($"{row.DisplayName}（{ex.Message}）");
+            }
+        }
+
+        await LoadAsync();
+
+        var parts = new List<string>();
+        if (succeeded.Count > 0) parts.Add($"成功卸载 {succeeded.Count} 个");
+        if (needsAdmin.Count > 0) parts.Add($"{needsAdmin.Count} 个需要管理员权限，已跳过：{string.Join("、", needsAdmin)}");
+        if (failed.Count > 0) parts.Add($"{failed.Count} 个失败：{string.Join("；", failed)}");
+        StatusText.Text = string.Join("；", parts) + "。";
+
+        if (allLeftovers.Count > 0) ShowBatchResidue(allLeftovers, succeeded.Count);
+
+        RefreshButton.IsEnabled = true;
+        UninstallButton.IsEnabled = AppList.SelectedItem is AppRow;
+    }
+
+    // Like ShowResidue, but for several apps at once: no single app to watch "still cleaning up" against, so the
+    // live-shrinking behavior is skipped here.
+    private void ShowBatchResidue(IReadOnlyList<ResidueItem> leftovers, int appCount)
+    {
+        ResidueTitle.Text = $"批量卸载的 {appCount} 个程序一共可能还留下 {leftovers.Count} 项，请检查后再决定是否删除";
+        ResidueList.ItemsSource = leftovers.Select(item => new ResidueRow(item)).ToList();
+        ResidueResult.Visibility = Visibility.Collapsed;
+        ResiduePanel.Visibility = Visibility.Visible;
     }
 
     // The uninstaller handed over to a background process: wait (bounded, and without blocking the buttons) until the

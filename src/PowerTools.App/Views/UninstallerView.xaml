@@ -46,7 +46,15 @@
                     Style="{StaticResource AccentButtonStyle}" />
         </Grid>
 
-        <TextBlock x:Name="StatusText" Grid.Row="1" TextWrapping="Wrap" Text="正在读取已安装的程序…" />
+        <Grid Grid.Row="1" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock x:Name="StatusText" TextWrapping="Wrap" Text="正在读取已安装的程序…" />
+            <Button x:Name="BatchUninstallButton" Grid.Column="1" Content="批量卸载…" IsEnabled="False" Click="OnBatchUninstallClick"
+                    ToolTipService.ToolTip="勾选多个程序左侧的复选框后点这里，会先显示预计释放的总空间再确认" />
+        </Grid>
 
         <ListView x:Name="AppList" Grid.Row="2" SelectionMode="Single" SelectionChanged="OnSelectionChanged">
             <ListView.ItemContainerStyle>
@@ -59,19 +67,22 @@
                 <DataTemplate x:DataType="local:AppRow">
                     <Grid ColumnSpacing="12" AutomationProperties.Name="{x:Bind DisplayName}">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="32" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="90" />
                             <ColumnDefinition Width="90" />
                             <ColumnDefinition Width="100" />
                         </Grid.ColumnDefinitions>
+                        <CheckBox IsChecked="{x:Bind IsChecked, Mode=TwoWay}" Checked="OnRowCheckChanged" Unchecked="OnRowCheckChanged"
+                                  VerticalAlignment="Center" MinWidth="0" AutomationProperties.Name="{x:Bind DisplayName}" />
                         <!-- The plate keeps white line-art icons (some Store apps) visible on a light theme; the shopping bag is the placeholder. -->
-                        <Grid Width="32" Height="32" CornerRadius="6" VerticalAlignment="Center"
+                        <Grid Grid.Column="1" Width="32" Height="32" CornerRadius="6" VerticalAlignment="Center"
                               Background="#66808080">
                             <Image Source="{StaticResource AppPlaceholder}" Width="20" Height="20" Visibility="{x:Bind PlaceholderVisibility, Mode=OneWay}" />
                             <Image Source="{x:Bind Icon, Mode=OneWay}" Width="24" Height="24" Visibility="{x:Bind IconVisibility, Mode=OneWay}" />
                         </Grid>
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <TextBlock Text="{x:Bind DisplayName}" TextTrimming="CharacterEllipsis" />
                                 <TextBlock Text="新" FontSize="11" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
@@ -79,10 +90,10 @@
                             </StackPanel>
                             <TextBlock Text="{x:Bind Subtitle, Mode=OneWay}" Opacity="0.6" TextTrimming="CharacterEllipsis" FontSize="12" />
                         </StackPanel>
-                        <TextBlock Grid.Column="2" Text="{x:Bind SourceText}" Opacity="0.7" VerticalAlignment="Center" />
-                        <TextBlock Grid.Column="3" Text="{x:Bind SizeText, Mode=OneWay}" Opacity="0.7" VerticalAlignment="Center"
+                        <TextBlock Grid.Column="3" Text="{x:Bind SourceText}" Opacity="0.7" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="4" Text="{x:Bind SizeText, Mode=OneWay}" Opacity="0.7" VerticalAlignment="Center"
                                    ToolTipService.ToolTip="{x:Bind SizeTooltip, Mode=OneWay}" />
-                        <TextBlock Grid.Column="4" Text="{x:Bind DateText}" Opacity="0.7" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="5" Text="{x:Bind DateText}" Opacity="0.7" VerticalAlignment="Center" />
                     </Grid>
                 </DataTemplate>
             </ListView.ItemTemplate>

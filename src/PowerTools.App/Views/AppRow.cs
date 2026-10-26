@@ -11,11 +11,20 @@ public sealed class AppRow : INotifyPropertyChanged
     private bool _measuring;
     private bool _sizeChecked;
 
+    private bool _isChecked;
+
     public AppRow(InstalledApp app)
     {
         App = app;
         _sizeBytes = app.EstimatedSizeBytes;
         Health = AppHealth.Check(app);
+    }
+
+    /// <summary>Ticked for batch uninstall; independent of which row is "selected" (single-click) in the list.</summary>
+    public bool IsChecked
+    {
+        get => _isChecked;
+        set => Set(ref _isChecked, value);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
