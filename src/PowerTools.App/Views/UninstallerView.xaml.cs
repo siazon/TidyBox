@@ -50,6 +50,7 @@ public sealed partial class UninstallerView : Page
         {
             var apps = await _module.LoadAppsAsync();
             _all = await Task.Run(() => apps.Select(app => new AppRow(app)).ToList());
+            BatchUninstallButton.IsEnabled = false; // fresh rows are all unchecked after a reload
             ApplyFilter();
             _ = MeasureMissingSizesAsync();
             _ = LoadIconsAsync();
