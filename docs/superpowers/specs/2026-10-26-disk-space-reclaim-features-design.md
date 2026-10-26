@@ -153,3 +153,33 @@ src/PowerTools.App/Views/UninstallerView.xaml(.cs)   多选 UI + 预览条 + 进
 - [ ] `SHEmptyRecycleBinW` 包身份下可用性
 - [ ] `Microsoft.Data.Sqlite` 只读内容文件在 MSIX 包内的路径解析
 - [ ] `ElevatedHelper` 新增 `quarantine.inspect` / `quarantine.purge` 两个 operation 的管道/白名单扩展方式
+
+
+---
+
+## 实现状态（2026-10-26 更新）
+
+全部完成，按 commit 顺序：
+
+1. `refactor: move IRecycleBin to PowerTools.Core` — 模块共享基础设施
+2. `feat: add KnownSharedFolders whitelist` — §1 白名单
+3. `feat: add OrphanFolderScanner` — §1 核心扫描逻辑
+4. `feat: expose orphan folder detection ... on DiskAnalyzerModule` — §1 模块接入
+5. `feat: add orphan-folder review panel` — §1 UI
+6. `feat: add SteamAppCache` — §2 名字缓存
+7. `feat: add WorkshopResidueScanner` — §2 核心扫描逻辑
+8. `feat: wire workshop residue detection into DiskAnalyzerModule` — §2 模块接入（含测试隔离修复）
+9. `feat: add workshop-residue review panel` — §2 UI
+10. `feat: add quarantine inspect/purge operations` — §0 ElevatedHelper 侧
+11. `feat: add IRecycleBin.Empty()` — §0 真正清空回收站
+12. `feat: expose recycle-bin empty and quarantine inspect/purge on the modules` — §0 模块接入
+13. `feat: add recycle-bin empty and quarantine management buttons to the UI` — §0 UI
+14. `feat: add batch uninstall with space preview` — §3 批量卸载预览
+
+全量测试：565 个全部通过（DiskAnalyzer 133、Uninstaller 182、Core 43、ElevatedHelper 52、ContextMenu 156）。
+
+**与原设计的偏差**（均已在对话中确认）：
+- §4 的"参考数据/缓存"换成了纯 JSON 文件（`KnownSharedFolders.json` 嵌入资源 + `SteamAppCache.json` 本地文件），未引入 SQLite。
+- 孤儿目录检测范围确定为仅 Steam，不扩展到普通软件。
+- §3 批量卸载预览没有把 `AppList` 整体改成多选模式（风险太高），改为给每行加独立的 CheckBox，不影响现有单选/拖拽定位等流程；卸载前预览的是"已知大小"的总和，未知大小的项目会在确认框里单独提示。
+- 批量卸载里，"需要管理员权限"的项目直接跳过（不逐个弹 UAC 确认），统一在结果里提示用户之后单独用"以管理员身份重试"处理；这是为了避免批量流程里连续弹出多个确认框打断操作。
