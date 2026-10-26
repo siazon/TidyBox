@@ -168,42 +168,81 @@
                         </ListView.ItemTemplate>
                     </ListView>
 
-                    <Border x:Name="OrphanPanel" Grid.Row="1" Visibility="Collapsed" Padding="16,12" CornerRadius="6" BorderThickness="1"
-                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
-                        <StackPanel Spacing="8">
-                            <TextBlock x:Name="OrphanTitle" FontWeight="SemiBold" TextWrapping="Wrap" />
-                            <TextBlock Text="这些文件夹在 steamapps\common 下，但找不到对应的已安装游戏（可能是卸载中断或手动删过登记文件留下的）。默认不勾选，确认后移到回收站。"
-                                       TextWrapping="Wrap" Opacity="0.7" />
-                            <ListView x:Name="OrphanList" SelectionMode="None" MaxHeight="220">
-                                <ListView.ItemContainerStyle>
-                                    <Style TargetType="ListViewItem">
-                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                    </Style>
-                                </ListView.ItemContainerStyle>
-                                <ListView.ItemTemplate>
-                                    <DataTemplate x:DataType="local:OrphanFolderRow">
-                                        <Grid ColumnSpacing="8">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <CheckBox IsChecked="{x:Bind IsChecked, Mode=TwoWay}" MinWidth="0"
-                                                      AutomationProperties.Name="{x:Bind Name}" />
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Text="{x:Bind Detail}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
-                                            </StackPanel>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ListView.ItemTemplate>
-                            </ListView>
-                            <TextBlock x:Name="OrphanResult" Visibility="Collapsed" TextWrapping="Wrap" />
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button x:Name="RemoveOrphanButton" Content="清理选中项" Click="OnRemoveOrphanClick" />
+                    <StackPanel Grid.Row="1" Spacing="8">
+                        <Border x:Name="OrphanPanel" Visibility="Collapsed" Padding="16,12" CornerRadius="6" BorderThickness="1"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                            <StackPanel Spacing="8">
+                                <TextBlock x:Name="OrphanTitle" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Text="这些文件夹在 steamapps\common 下，但找不到对应的已安装游戏（可能是卸载中断或手动删过登记文件留下的）。默认不勾选，确认后移到回收站。"
+                                           TextWrapping="Wrap" Opacity="0.7" />
+                                <ListView x:Name="OrphanList" SelectionMode="None" MaxHeight="220">
+                                    <ListView.ItemContainerStyle>
+                                        <Style TargetType="ListViewItem">
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        </Style>
+                                    </ListView.ItemContainerStyle>
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="local:OrphanFolderRow">
+                                            <Grid ColumnSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <CheckBox IsChecked="{x:Bind IsChecked, Mode=TwoWay}" MinWidth="0"
+                                                          AutomationProperties.Name="{x:Bind Name}" />
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{x:Bind Detail}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                                <TextBlock x:Name="OrphanResult" Visibility="Collapsed" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button x:Name="RemoveOrphanButton" Content="清理选中项" Click="OnRemoveOrphanClick" />
+                                </StackPanel>
                             </StackPanel>
-                        </StackPanel>
-                    </Border>
+                        </Border>
+
+                        <Border x:Name="WorkshopPanel" Visibility="Collapsed" Padding="16,12" CornerRadius="6" BorderThickness="1"
+                                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                            <StackPanel Spacing="8">
+                                <TextBlock x:Name="WorkshopTitle" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Text="这些创意工坊内容对应的游戏已卸载，但 Steam 不会自动清理它们。默认不勾选——如果你以后打算重装这些游戏并继续使用这些内容，请不要删除；删除后如重新订阅需要重新下载。确认后移到回收站。"
+                                           TextWrapping="Wrap" Opacity="0.7" />
+                                <ListView x:Name="WorkshopList" SelectionMode="None" MaxHeight="220">
+                                    <ListView.ItemContainerStyle>
+                                        <Style TargetType="ListViewItem">
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        </Style>
+                                    </ListView.ItemContainerStyle>
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="local:WorkshopResidueRow">
+                                            <Grid ColumnSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <CheckBox IsChecked="{x:Bind IsChecked, Mode=TwoWay}" MinWidth="0"
+                                                          AutomationProperties.Name="{x:Bind Name}" />
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{x:Bind Detail}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                                <TextBlock x:Name="WorkshopResult" Visibility="Collapsed" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button x:Name="RemoveWorkshopButton" Content="清理选中项" Click="OnRemoveWorkshopClick" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
                 </Grid>
             </PivotItem>
         </Pivot>

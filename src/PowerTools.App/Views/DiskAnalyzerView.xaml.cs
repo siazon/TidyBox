@@ -142,6 +142,7 @@ public sealed partial class DiskAnalyzerView : Page
         }
 
         await LoadOrphanFoldersAsync();
+        await LoadWorkshopResiduesAsync();
     }
 
     private async Task LoadOrphanFoldersAsync()
@@ -209,6 +210,74 @@ public sealed partial class DiskAnalyzerView : Page
         finally
         {
             RemoveOrphanButton.IsEnabled = true;
+        }
+    }
+
+    private async Task LoadWorkshopResiduesAsync()
+    {
+        try
+        {
+            var residues = await Task.Run(_module.GetWorkshopResidues);
+            if (residues.Count == 0)
+            {
+                WorkshopPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            WorkshopTitle.Text = $"发现 {residues.Count} 项未安装游戏的创意工坊残留";
+            WorkshopList.ItemsSource = residues.Select(r => new WorkshopResidueRow(r)).ToList();
+            WorkshopResult.Visibility = Visibility.Collapsed;
+            WorkshopPanel.Visibility = Visibility.Visible;
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"扫描创意工坊残留失败：{ex.Message}";
+        }
+    }
+
+    private async void OnRemoveWorkshopClick(object sender, RoutedEventArgs e)
+    {
+        var rows = ((IEnumerable<WorkshopResidueRow>)WorkshopList.ItemsSource).ToList();
+        var chosen = rows.Where(r => r.IsChecked).ToList();
+        if (chosen.Count == 0)
+        {
+            StatusText.Text = "没有勾选任何要清理的创意工坊内容。";
+            return;
+        }
+
+        RemoveWorkshopButton.IsEnabled = false;
+        var removed = new List<WorkshopResidueRow>();
+        var failures = new List<(WorkshopResidueRow Row, string Error)>();
+        try
+        {
+            foreach (var row in chosen)
+            {
+                try
+                {
+                    await _module.RemoveWorkshopResidueAsync(row.Item);
+                    removed.Add(row);
+                }
+                catch (Exception ex)
+                {
+                    failures.Add((row, ex.Message));
+                }
+            }
+
+            var remaining = rows.Except(removed).ToList();
+            WorkshopList.ItemsSource = remaining;
+            if (remaining.Count == 0) WorkshopPanel.Visibility = Visibility.Collapsed;
+            else WorkshopTitle.Text = $"发现 {remaining.Count} 项未安装游戏的创意工坊残留";
+
+            var parts = new List<string>();
+            if (removed.Count > 0) parts.Add($"已移除 {removed.Count} 项，可在回收站中找回");
+            if (failures.Count > 0) parts.Add($"{failures.Count} 项失败：{failures[0].Row.Name} —— {failures[0].Error}");
+
+            StatusText.Text = WorkshopResult.Text = string.Join("；", parts) + "。";
+            WorkshopResult.Visibility = Visibility.Visible;
+        }
+        finally
+        {
+            RemoveWorkshopButton.IsEnabled = true;
         }
     }
 
