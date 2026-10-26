@@ -39,6 +39,18 @@ public sealed class UninstallerModuleTests : IDisposable
             => Task.FromResult(new ElevationResponse(false, "not expected", null));
     }
 
+    private sealed class FakeElevation : IElevationClient
+    {
+        public List<ElevationRequest> Requests = new();
+        public Func<ElevationRequest, ElevationResponse> Respond = _ => new ElevationResponse(true, null, null);
+
+        public Task<ElevationResponse> ExecuteAsync(ElevationRequest request, CancellationToken ct = default)
+        {
+            Requests.Add(request);
+            return Task.FromResult(Respond(request));
+        }
+    }
+
     private readonly string _base = Path.Combine(Path.GetTempPath(), "PowerToolsTests", Guid.NewGuid().ToString("N"));
     private readonly string _appData;
     private readonly FakeRunner _runner = new();
@@ -51,15 +63,19 @@ public sealed class UninstallerModuleTests : IDisposable
 
     public void Dispose() => Directory.Delete(_base, recursive: true);
 
-    private UninstallerModule Module(params IAppCatalog[] catalogs)
+    private UninstallerModule Module(params IAppCatalog[] catalogs) => Module(new NoElevation(), catalogs);
+
+    private UninstallerModule Module(IElevationClient elevation, params IAppCatalog[] catalogs)
     {
         var roots = new ResidueRoots(new[] { _appData }, Array.Empty<string>(), Array.Empty<RegistryRoot>());
         return new UninstallerModule(
             catalogs,
             new UninstallRouter(_runner, _store, _urls),
             new ResidueScanner(roots),
-            new ResidueRemover(_bin, new NoElevation(), roots),
-            delay: (_, ct) => { ct.ThrowIfCancellationRequested(); _onDelay?.Invoke(); return Task.CompletedTask; });
+            new ResidueRemover(_bin, elevation, roots),
+            delay: (_, ct) => { ct.ThrowIfCancellationRequested(); _onDelay?.Invoke(); return Task.CompletedTask; },
+            recycleBin: _bin,
+            elevation: elevation);
     }
 
     private static InstalledApp App(string name, AppSource source = AppSource.Win32, string? uninstall = null, string? installLocation = null,
@@ -280,5 +296,55 @@ public sealed class UninstallerModuleTests : IDisposable
 
         Assert.True(Assert.Single(results).Success);
         Assert.Equal(new[] { folder }, _bin.Deleted);
+    }
+
+    [Fact]
+    public async Task EmptyRecycleBinAsync_CallsRecycleBinEmpty()
+    {
+        await Module().EmptyRecycleBinAsync();
+
+        Assert.Equal(1, _bin.EmptyCalls);
+    }
+
+    [Fact]
+    public async Task InspectQuarantineAsync_ParsesTheHelperResponse()
+    {
+        var elevation = new FakeElevation { Respond = _ => new ElevationResponse(true, null, """{"TotalBytes":12345,"BatchCount":3}""") };
+
+        var summary = await Module(elevation).InspectQuarantineAsync();
+
+        Assert.Equal(12345, summary.TotalBytes);
+        Assert.Equal(3, summary.BatchCount);
+        Assert.Equal("quarantine.inspect", Assert.Single(elevation.Requests).OperationType);
+    }
+
+    [Fact]
+    public async Task InspectQuarantineAsync_HelperFailure_ReturnsZero()
+    {
+        var elevation = new FakeElevation { Respond = _ => new ElevationResponse(false, "no admin", null) };
+
+        var summary = await Module(elevation).InspectQuarantineAsync();
+
+        Assert.Equal(0, summary.TotalBytes);
+        Assert.Equal(0, summary.BatchCount);
+    }
+
+    [Fact]
+    public async Task PurgeQuarantineAsync_SendsThePurgeOperation_AndReturnsSuccess()
+    {
+        var elevation = new FakeElevation();
+
+        var success = await Module(elevation).PurgeQuarantineAsync();
+
+        Assert.True(success);
+        Assert.Equal("quarantine.purge", Assert.Single(elevation.Requests).OperationType);
+    }
+
+    [Fact]
+    public async Task PurgeQuarantineAsync_HelperFailure_ReturnsFalse()
+    {
+        var elevation = new FakeElevation { Respond = _ => new ElevationResponse(false, "denied", null) };
+
+        Assert.False(await Module(elevation).PurgeQuarantineAsync());
     }
 }

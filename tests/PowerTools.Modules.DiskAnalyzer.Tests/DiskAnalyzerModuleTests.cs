@@ -222,4 +222,15 @@ public class DiskAnalyzerModuleTests : IDisposable
         await Assert.ThrowsAsync<ArgumentException>(() => module.RemoveWorkshopResidueAsync(tampered));
         Assert.Empty(recycleBin.Deleted);
     }
+
+    [Fact]
+    public async Task EmptyRecycleBinAsync_CallsRecycleBinEmpty()
+    {
+        var recycleBin = new FakeRecycleBin();
+        var module = new DiskAnalyzerModule(steamInstallPathOverride: _dir, recycleBin: recycleBin);
+
+        await module.EmptyRecycleBinAsync();
+
+        Assert.Equal(1, recycleBin.EmptyCalls);
+    }
 }

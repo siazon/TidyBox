@@ -23,6 +23,8 @@ public sealed class UninstallerModule : IToolModule
     private readonly IAppIconProvider _icons;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
     private readonly WatchOptions _watchOptions;
+    private readonly IRecycleBin _recycleBin;
+    private readonly IElevationClient _elevation;
 
     public UninstallerModule()
         : this(
@@ -33,21 +35,24 @@ public sealed class UninstallerModule : IToolModule
     }
 
     private UninstallerModule(IReadOnlyList<IAppCatalog> catalogs, UninstallRouter router, ResidueRoots roots)
-        : this(
-            catalogs,
-            router,
-            new ResidueScanner(roots),
-            new ResidueRemover(
-                new ShellRecycleBin(),
-                new ElevationClient(
-                    ElevationClient.NewSessionPipeName(),
-                    new ElevatedHelperProcessLauncher(Path.Combine(AppContext.BaseDirectory, "PowerTools.ElevatedHelper.exe"))),
-                roots))
+        : this(catalogs, router, roots, new ShellRecycleBin(), RealElevationClient())
+    {
+    }
+
+    // Shared by the residue remover and the quarantine inspect/purge calls, so they reuse the same elevated
+    // helper process instead of each launching their own.
+    private static IElevationClient RealElevationClient() => new ElevationClient(
+        ElevationClient.NewSessionPipeName(),
+        new ElevatedHelperProcessLauncher(Path.Combine(AppContext.BaseDirectory, "PowerTools.ElevatedHelper.exe")));
+
+    private UninstallerModule(IReadOnlyList<IAppCatalog> catalogs, UninstallRouter router, ResidueRoots roots, IRecycleBin recycleBin, IElevationClient elevation)
+        : this(catalogs, router, new ResidueScanner(roots), new ResidueRemover(recycleBin, elevation, roots), recycleBin: recycleBin, elevation: elevation)
     {
     }
 
     public UninstallerModule(IEnumerable<IAppCatalog> catalogs, UninstallRouter router, ResidueScanner scanner, ResidueRemover remover,
-        IAppIconProvider? icons = null, Func<TimeSpan, CancellationToken, Task>? delay = null, WatchOptions? watchOptions = null)
+        IAppIconProvider? icons = null, Func<TimeSpan, CancellationToken, Task>? delay = null, WatchOptions? watchOptions = null,
+        IRecycleBin? recycleBin = null, IElevationClient? elevation = null)
     {
         _catalogs = catalogs.ToList();
         _router = router;
@@ -56,6 +61,8 @@ public sealed class UninstallerModule : IToolModule
         _icons = icons ?? new AppIconProvider(new ShellIconExtractor());
         _delay = delay ?? Task.Delay;
         _watchOptions = watchOptions ?? WatchOptions.Default;
+        _recycleBin = recycleBin ?? new ShellRecycleBin();
+        _elevation = elevation ?? RealElevationClient();
     }
 
     public string ModuleId => "uninstaller";
@@ -155,4 +162,34 @@ public sealed class UninstallerModule : IToolModule
 
     public Task<IReadOnlyList<RemovalResult>> RemoveResidueAsync(IReadOnlyList<ResidueItem> items, CancellationToken ct = default)
         => _remover.RemoveAsync(items, ct);
+
+    /// <summary>Empties the Recycle Bin (on every drive), so folders moved there by a previous removal are actually freed.</summary>
+    public Task EmptyRecycleBinAsync(CancellationToken ct = default) => Task.Run(_recycleBin.Empty, ct);
+
+    /// <summary>How much the quarantine folder (admin-only residue removals) is currently holding.</summary>
+    public async Task<QuarantineSummary> InspectQuarantineAsync(CancellationToken ct = default)
+    {
+        var response = await _elevation.ExecuteAsync(new ElevationRequest("quarantine.inspect", "{}"), ct);
+        if (!response.Success || response.ResultJson is null) return new QuarantineSummary(0, 0);
+
+        try
+        {
+            return System.Text.Json.JsonSerializer.Deserialize<QuarantineSummary>(response.ResultJson) ?? new QuarantineSummary(0, 0);
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return new QuarantineSummary(0, 0);
+        }
+    }
+
+    /// <summary>Really deletes everything in the quarantine folder. Only call this after the user has explicitly confirmed.</summary>
+    public async Task<bool> PurgeQuarantineAsync(CancellationToken ct = default)
+    {
+        var response = await _elevation.ExecuteAsync(new ElevationRequest("quarantine.purge", "{}"), ct);
+        return response.Success;
+    }
 }
+
+/// <param name="TotalBytes">Total size of everything currently quarantined.</param>
+/// <param name="BatchCount">Number of past cleanup operations still sitting in quarantine.</param>
+public record QuarantineSummary(long TotalBytes, int BatchCount);
