@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace PowerTools.Modules.DiskAnalyzer.Steam;
 
@@ -10,10 +9,10 @@ namespace PowerTools.Modules.DiskAnalyzer.Steam;
 /// </summary>
 public static class KnownSharedFolders
 {
-    private static readonly Regex NonAlphanumeric = new(@"[^a-z0-9]", RegexOptions.Compiled);
-
-    /// <summary>Lower-case letters and digits only, so "SteamVR" and "Steam VR" match the same entry.</summary>
-    public static string Normalize(string? text) => NonAlphanumeric.Replace((text ?? "").ToLowerInvariant(), "");
+    // Only case is folded, nothing is stripped: a folder a user copied (Explorer appends " - 副本" / " - Copy" /
+    // "(2)") must end up as a *different* string from the original, or the copy would be silently treated as the
+    // legitimate shared folder and never show up as an orphan.
+    public static string Normalize(string? text) => (text ?? "").Trim().ToLowerInvariant();
 
     /// <returns>The normalized names of all known shared/non-game folders.</returns>
     public static IReadOnlySet<string> Load()
