@@ -30,7 +30,12 @@
                 </StackPanel>
                 <ToggleSwitch x:Name="ClassicSwitch" Grid.Column="1" OnContent="已开启" OffContent="已关闭" Toggled="OnClassicToggled"
                               AutomationProperties.Name="恢复完整（经典）右键菜单" />
-                <Button x:Name="RestartButton" Grid.Column="2" Content="重启资源管理器" Click="OnRestartClick" VerticalAlignment="Center" />
+                <Button x:Name="RestartButton" Grid.Column="2" Click="OnRestartClick" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xF305;" FontSize="14" />
+                        <TextBlock Text="重启资源管理器" />
+                    </StackPanel>
+                </Button>
             </Grid>
         </Border>
 
@@ -62,8 +67,13 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBox x:Name="SearchBox" PlaceholderText="搜索名称、发布者、路径…" TextChanged="OnSearchChanged" />
-            <Button x:Name="RestoreAllButton" Grid.Column="1" Content="恢复全部已停用的项" Click="OnRestoreAllClick"
-                    ToolTipService.ToolTip="把所有已停用的右键菜单项重新启用" />
+            <Button x:Name="RestoreAllButton" Grid.Column="1" Click="OnRestoreAllClick"
+                    ToolTipService.ToolTip="把所有已停用的右键菜单项重新启用">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE7A7;" FontSize="14" />
+                    <TextBlock Text="恢复全部已停用的项" />
+                </StackPanel>
+            </Button>
         </Grid>
 
         <TextBlock x:Name="StatusText" Grid.Row="3" TextWrapping="Wrap" Text="正在读取右键菜单…" />

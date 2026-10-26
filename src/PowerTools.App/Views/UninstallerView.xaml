@@ -41,9 +41,19 @@
                 <ComboBoxItem Content="按大小" Tag="size" />
                 <ComboBoxItem Content="最近安装" Tag="date" />
             </ComboBox>
-            <Button x:Name="RefreshButton" Grid.Column="3" Content="刷新" Click="OnRefreshClick" />
-            <Button x:Name="UninstallButton" Grid.Column="4" Content="卸载" IsEnabled="False" Click="OnUninstallClick"
-                    Style="{StaticResource AccentButtonStyle}" />
+            <Button x:Name="RefreshButton" Grid.Column="3" Click="OnRefreshClick">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                    <TextBlock Text="刷新" />
+                </StackPanel>
+            </Button>
+            <Button x:Name="UninstallButton" Grid.Column="4" IsEnabled="False" Click="OnUninstallClick"
+                    Style="{StaticResource AccentButtonStyle}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xEC91;" FontSize="14" />
+                    <TextBlock Text="卸载" />
+                </StackPanel>
+            </Button>
         </Grid>
 
         <Grid Grid.Row="1" ColumnSpacing="8">
@@ -52,8 +62,13 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock x:Name="StatusText" TextWrapping="Wrap" Text="正在读取已安装的程序…" />
-            <Button x:Name="BatchUninstallButton" Grid.Column="1" Content="批量卸载…" IsEnabled="False" Click="OnBatchUninstallClick"
-                    ToolTipService.ToolTip="勾选多个程序左侧的复选框后点这里，会先显示预计释放的总空间再确认" />
+            <Button x:Name="BatchUninstallButton" Grid.Column="1" IsEnabled="False" Click="OnBatchUninstallClick"
+                    ToolTipService.ToolTip="勾选多个程序左侧的复选框后点这里，会先显示预计释放的总空间再确认">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <FontIcon Glyph="&#xE762;" FontSize="14" />
+                    <TextBlock Text="批量卸载…" />
+                </StackPanel>
+            </Button>
         </Grid>
 
         <ListView x:Name="AppList" Grid.Row="2" SelectionMode="Single" SelectionChanged="OnSelectionChanged">
@@ -131,12 +146,32 @@
                 </ListView>
                 <TextBlock x:Name="ResidueResult" Visibility="Collapsed" TextWrapping="Wrap" />
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button x:Name="RemoveButton" Content="删除选中项" Click="OnRemoveResidueClick" />
-                    <Button Content="忽略" Click="OnDismissResidueClick" />
-                    <Button Content="清空回收站" Click="OnEmptyRecycleBinClick"
-                            ToolTipService.ToolTip="移到回收站的文件在这里之前不会真正释放磁盘空间；清空回收站会清空整台机器的回收站，不止这次删除的内容" />
-                    <Button Content="管理隔离区" Click="OnManageQuarantineClick"
-                            ToolTipService.ToolTip="查看需要管理员权限才能删除的残留占用了多少空间，并可以清空" />
+                    <Button x:Name="RemoveButton" Click="OnRemoveResidueClick">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                            <TextBlock Text="删除选中项" />
+                        </StackPanel>
+                    </Button>
+                    <Button Click="OnDismissResidueClick">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE711;" FontSize="14" />
+                            <TextBlock Text="忽略" />
+                        </StackPanel>
+                    </Button>
+                    <Button Click="OnEmptyRecycleBinClick"
+                            ToolTipService.ToolTip="移到回收站的文件在这里之前不会真正释放磁盘空间；清空回收站会清空整台机器的回收站，不止这次删除的内容">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xE74D;" FontSize="14" />
+                            <TextBlock Text="清空回收站" />
+                        </StackPanel>
+                    </Button>
+                    <Button Click="OnManageQuarantineClick"
+                            ToolTipService.ToolTip="查看需要管理员权限才能删除的残留占用了多少空间，并可以清空">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="&#xF5B4;" FontSize="14" />
+                            <TextBlock Text="管理隔离区" />
+                        </StackPanel>
+                    </Button>
                     <TextBlock x:Name="RecycleBinUsageText" Opacity="0.7" VerticalAlignment="Center" />
                     <Border x:Name="RecycleBinUsageBarContainer" Width="90" Height="10" CornerRadius="5" VerticalAlignment="Center"
                             Visibility="Collapsed"

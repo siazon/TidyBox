@@ -37,9 +37,9 @@ public sealed partial class DiskAnalyzerView : Page
 
     private void BuildRowMenu()
     {
-        void Add(string text, Action<DiskTreeRow> action)
+        void Add(string text, string glyph, Action<DiskTreeRow> action)
         {
-            var item = new MenuFlyoutItem { Text = text };
+            var item = new MenuFlyoutItem { Text = text, Icon = new FontIcon { Glyph = glyph } };
             item.Click += (_, _) =>
             {
                 if (_menuRow is { } row) action(row);
@@ -47,11 +47,11 @@ public sealed partial class DiskAnalyzerView : Page
             _rowMenu.Items.Add(item);
         }
 
-        Add("浏览文件夹", row => RunTool(row, folder => Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { folder }, UseShellExecute = false })));
-        Add("命令提示符", row => RunTool(row, folder => Process.Start(new ProcessStartInfo("cmd.exe") { WorkingDirectory = folder, UseShellExecute = true })));
+        Add("浏览文件夹", "\uE838", row => RunTool(row, folder => Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { folder }, UseShellExecute = false })));
+        Add("命令提示符", "\uE756", row => RunTool(row, folder => Process.Start(new ProcessStartInfo("cmd.exe") { WorkingDirectory = folder, UseShellExecute = true })));
         _rowMenu.Items.Add(new MenuFlyoutSeparator());
-        Add("复制路径", row => CopyText(row.Node.FullPath));
-        Add("将文件和大小信息复制到剪贴板", row => CopyText(DiskRowInfo.ToClipboardText(row.Node)));
+        Add("复制路径", "\uE8C8", row => CopyText(row.Node.FullPath));
+        Add("将文件和大小信息复制到剪贴板", "\uF0E3", row => CopyText(DiskRowInfo.ToClipboardText(row.Node)));
     }
 
     // Right-click (or the menu key) on a row: select it and show the menu next to it.
