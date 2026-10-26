@@ -153,9 +153,11 @@ public sealed partial class DiskAnalyzerView : Page
             if (orphans.Count == 0)
             {
                 OrphanPanel.Visibility = Visibility.Collapsed;
+                OrphanCleanText.Visibility = Visibility.Visible;
                 return;
             }
 
+            OrphanCleanText.Visibility = Visibility.Collapsed;
             OrphanTitle.Text = $"发现 {orphans.Count} 个疑似孤儿目录";
             OrphanList.ItemsSource = orphans.Select(o => new OrphanFolderRow(o)).ToList();
             OrphanResult.Visibility = Visibility.Collapsed;
@@ -197,8 +199,15 @@ public sealed partial class DiskAnalyzerView : Page
 
             var remaining = rows.Except(removed).ToList();
             OrphanList.ItemsSource = remaining;
-            if (remaining.Count == 0) OrphanPanel.Visibility = Visibility.Collapsed;
-            else OrphanTitle.Text = $"发现 {remaining.Count} 个疑似孤儿目录";
+            if (remaining.Count == 0)
+            {
+                OrphanPanel.Visibility = Visibility.Collapsed;
+                OrphanCleanText.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                OrphanTitle.Text = $"发现 {remaining.Count} 个疑似孤儿目录";
+            }
 
             var parts = new List<string>();
             if (removed.Count > 0) parts.Add($"已移除 {removed.Count} 项，可在回收站中找回");
@@ -221,9 +230,11 @@ public sealed partial class DiskAnalyzerView : Page
             if (residues.Count == 0)
             {
                 WorkshopPanel.Visibility = Visibility.Collapsed;
+                WorkshopCleanText.Visibility = Visibility.Visible;
                 return;
             }
 
+            WorkshopCleanText.Visibility = Visibility.Collapsed;
             WorkshopTitle.Text = $"发现 {residues.Count} 项未安装游戏的创意工坊残留";
             WorkshopList.ItemsSource = residues.Select(r => new WorkshopResidueRow(r)).ToList();
             WorkshopResult.Visibility = Visibility.Collapsed;
@@ -265,8 +276,15 @@ public sealed partial class DiskAnalyzerView : Page
 
             var remaining = rows.Except(removed).ToList();
             WorkshopList.ItemsSource = remaining;
-            if (remaining.Count == 0) WorkshopPanel.Visibility = Visibility.Collapsed;
-            else WorkshopTitle.Text = $"发现 {remaining.Count} 项未安装游戏的创意工坊残留";
+            if (remaining.Count == 0)
+            {
+                WorkshopPanel.Visibility = Visibility.Collapsed;
+                WorkshopCleanText.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                WorkshopTitle.Text = $"发现 {remaining.Count} 项未安装游戏的创意工坊残留";
+            }
 
             var parts = new List<string>();
             if (removed.Count > 0) parts.Add($"已移除 {removed.Count} 项，可在回收站中找回");

@@ -169,6 +169,8 @@
                     </ListView>
 
                     <StackPanel Grid.Row="1" Spacing="8">
+                        <TextBlock x:Name="OrphanCleanText" Visibility="Collapsed" Opacity="0.7" FontSize="12"
+                                   Text="✓ 已检查 steamapps\common，未发现孤儿目录" />
                         <Border x:Name="OrphanPanel" Visibility="Collapsed" Padding="16,12" CornerRadius="6" BorderThickness="1"
                                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
@@ -206,6 +208,8 @@
                             </StackPanel>
                         </Border>
 
+                        <TextBlock x:Name="WorkshopCleanText" Visibility="Collapsed" Opacity="0.7" FontSize="12"
+                                   Text="✓ 已检查创意工坊内容，未发现未安装游戏的残留" />
                         <Border x:Name="WorkshopPanel" Visibility="Collapsed" Padding="16,12" CornerRadius="6" BorderThickness="1"
                                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
