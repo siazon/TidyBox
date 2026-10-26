@@ -20,6 +20,7 @@ public class DiskAnalyzerModule : IToolModule
     private readonly ISteamAppNameLookup _steamAppCache;
     private readonly IRecycleBin _recycleBin;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
+    private readonly Func<string, bool> _steamAppStillRegistered;
 
     public DiskAnalyzerModule(
         string? steamInstallPathOverride = null,
@@ -27,7 +28,8 @@ public class DiskAnalyzerModule : IToolModule
         ISteamUninstallLauncher? steamUninstallLauncher = null,
         IRecycleBin? recycleBin = null,
         ISteamAppNameLookup? steamAppCache = null,
-        Func<TimeSpan, CancellationToken, Task>? delay = null)
+        Func<TimeSpan, CancellationToken, Task>? delay = null,
+        Func<string, bool>? steamAppStillRegistered = null)
     {
         _steamInstallPathOverride = steamInstallPathOverride;
         _snapshotDirectory = snapshotDirectory
@@ -38,6 +40,25 @@ public class DiskAnalyzerModule : IToolModule
         _steamAppCache = steamAppCache ?? new SteamAppCache();
         _workshopScanner = new WorkshopResidueScanner(_steamAppCache);
         _delay = delay ?? Task.Delay;
+        _steamAppStillRegistered = steamAppStillRegistered ?? IsSteamAppStillRegisteredInWindows;
+    }
+
+    // The appmanifest file (what GetSteamGames() reads) is Valve's own bookkeeping and is not guaranteed to
+    // disappear promptly, or at all, when a game is uninstalled. The "Steam App <id>" entry under Windows'
+    // own Uninstall registry key is the signal the Uninstaller module already relies on for the same question,
+    // and it is reliably removed when Steam finishes uninstalling, so this uses the same mechanism.
+    private static bool IsSteamAppStillRegisteredInWindows(string appId)
+    {
+        try
+        {
+            using var hklm64 = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+            using var key = hklm64.OpenSubKey($@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App {appId}");
+            return key is not null;
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException)
+        {
+            return true; // cannot tell; assume it is still there rather than wrongly declaring it gone
+        }
     }
 
     public string ModuleId => "disk-analyzer";
@@ -122,7 +143,7 @@ public class DiskAnalyzerModule : IToolModule
     {
         _steamUninstallLauncher.LaunchUninstall(appId);
 
-        bool IsGone() => !GetSteamGames().Any(g => g.AppId == appId);
+        bool IsGone() => !_steamAppStillRegistered(appId);
 
         const int maxAttempts = 40; // with the ~3s default interval, about 2 minutes total
         for (var attempt = 0; attempt < maxAttempts && !IsGone(); attempt++)
