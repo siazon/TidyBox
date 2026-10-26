@@ -15,7 +15,7 @@ var pipeName = args[0];
 var allowedClient = args.Length > 1 ? new SecurityIdentifier(args[1]) : null;
 
 // Handlers for the operations the modules ask the helper to perform.
-var handlers = new IElevatedOperationHandler[] { new RemoveResidualHandler() };
+var handlers = new IElevatedOperationHandler[] { new RemoveResidualHandler(), new QuarantineInspectHandler(), new QuarantinePurgeHandler() };
 
 var server = new ElevationServer(pipeName, handlers, TimeSpan.FromMinutes(5), allowedClient);
 await server.RunAsync(CancellationToken.None);
