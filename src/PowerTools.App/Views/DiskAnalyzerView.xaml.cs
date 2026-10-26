@@ -140,6 +140,76 @@ public sealed partial class DiskAnalyzerView : Page
             SteamTab.Header = "Steam 游戏（读取失败）";
             StatusText.Text = $"读取 Steam 游戏库失败：{ex.Message}";
         }
+
+        await LoadOrphanFoldersAsync();
+    }
+
+    private async Task LoadOrphanFoldersAsync()
+    {
+        try
+        {
+            var orphans = await Task.Run(_module.GetOrphanFolders);
+            if (orphans.Count == 0)
+            {
+                OrphanPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            OrphanTitle.Text = $"发现 {orphans.Count} 个疑似孤儿目录";
+            OrphanList.ItemsSource = orphans.Select(o => new OrphanFolderRow(o)).ToList();
+            OrphanResult.Visibility = Visibility.Collapsed;
+            OrphanPanel.Visibility = Visibility.Visible;
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"扫描孤儿目录失败：{ex.Message}";
+        }
+    }
+
+    private async void OnRemoveOrphanClick(object sender, RoutedEventArgs e)
+    {
+        var rows = ((IEnumerable<OrphanFolderRow>)OrphanList.ItemsSource).ToList();
+        var chosen = rows.Where(r => r.IsChecked).ToList();
+        if (chosen.Count == 0)
+        {
+            StatusText.Text = "没有勾选任何要清理的目录。";
+            return;
+        }
+
+        RemoveOrphanButton.IsEnabled = false;
+        var removed = new List<OrphanFolderRow>();
+        var failures = new List<(OrphanFolderRow Row, string Error)>();
+        try
+        {
+            foreach (var row in chosen)
+            {
+                try
+                {
+                    await _module.RemoveOrphanFolderAsync(row.Folder);
+                    removed.Add(row);
+                }
+                catch (Exception ex)
+                {
+                    failures.Add((row, ex.Message));
+                }
+            }
+
+            var remaining = rows.Except(removed).ToList();
+            OrphanList.ItemsSource = remaining;
+            if (remaining.Count == 0) OrphanPanel.Visibility = Visibility.Collapsed;
+            else OrphanTitle.Text = $"发现 {remaining.Count} 个疑似孤儿目录";
+
+            var parts = new List<string>();
+            if (removed.Count > 0) parts.Add($"已移除 {removed.Count} 项，可在回收站中找回");
+            if (failures.Count > 0) parts.Add($"{failures.Count} 项失败：{failures[0].Row.Name} —— {failures[0].Error}");
+
+            StatusText.Text = OrphanResult.Text = string.Join("；", parts) + "。";
+            OrphanResult.Visibility = Visibility.Visible;
+        }
+        finally
+        {
+            RemoveOrphanButton.IsEnabled = true;
+        }
     }
 
     private async void OnBrowseClick(object sender, RoutedEventArgs e)
