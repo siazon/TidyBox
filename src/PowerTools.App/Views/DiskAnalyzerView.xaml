@@ -47,7 +47,8 @@
             <TextBlock x:Name="StatusText" TextWrapping="Wrap"
                        Text="输入文件夹路径后点击“扫描”，或点击“浏览…”选择文件夹。" />
             <TextBlock x:Name="RecycleBinUsageText" Grid.Column="1" Opacity="0.7" VerticalAlignment="Center" />
-            <Border Grid.Column="2" Width="90" Height="10" CornerRadius="5" VerticalAlignment="Center"
+            <Border x:Name="RecycleBinUsageBarContainer" Grid.Column="2" Width="90" Height="10" CornerRadius="5" VerticalAlignment="Center"
+                    Visibility="Collapsed"
                     Background="{ThemeResource ControlFillColorSecondaryBrush}" BorderThickness="1" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}">
                 <Grid>
                     <Grid.ColumnDefinitions>

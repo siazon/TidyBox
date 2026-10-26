@@ -128,22 +128,30 @@ public sealed partial class DiskAnalyzerView : Page
             RecycleBinUsageText.Text = usage.ItemCount == 0
                 ? "回收站是空的"
                 : $"回收站当前占用 {ByteSizeFormatter.Format(usage.TotalBytes)}（{usage.ItemCount} 项，占总磁盘空间 {percent:0.0}%）";
-            SetRecycleBinBar(percent);
+            SetRecycleBinBar(usage.ItemCount == 0 ? null : percent);
         }
         catch (Exception)
         {
             RecycleBinUsageText.Text = ""; // not critical; the button still works without this hint
-            SetRecycleBinBar(0);
+            SetRecycleBinBar(null);
         }
     }
 
+    // Nothing to show a proportion of when the bin is empty; the bar only appears once there is something in it.
     // A real percentage is almost always tiny next to total disk capacity; a floor keeps the bar visible as more
     // than a sliver whenever there is anything at all, while RecycleBinUsageText still shows the exact number.
-    private void SetRecycleBinBar(double percent)
+    private void SetRecycleBinBar(double? percent)
     {
-        var display = percent > 0 ? Math.Clamp(Math.Max(percent, 2.0), 0, 100) : 0;
+        if (percent is not { } value)
+        {
+            RecycleBinUsageBarContainer.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var display = value > 0 ? Math.Clamp(Math.Max(value, 2.0), 0, 100) : 0;
         RecycleBinUsageBarFillColumn.Width = new GridLength(display, GridUnitType.Star);
         RecycleBinUsageBarRestColumn.Width = new GridLength(100 - display, GridUnitType.Star);
+        RecycleBinUsageBarContainer.Visibility = Visibility.Visible;
     }
 
     /// <summary>Started from the right-click menu: scans the folder it asked for, if any.</summary>
