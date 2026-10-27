@@ -1,0 +1,11 @@
+<Window
+    x:Class="PowerTools.App.TaskbarStrip.TaskbarStripWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- A vertical StackPanel hands its children the window's width, so long text is cut with an ellipsis instead of overflowing. -->
+    <StackPanel VerticalAlignment="Center" Margin="8,0">
+        <TextBlock x:Name="WordText" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxLines="1" />
+        <TextBlock x:Name="MeaningText" FontSize="12" Opacity="0.8" TextTrimming="CharacterEllipsis" MaxLines="1" />
+    </StackPanel>
+</Window>

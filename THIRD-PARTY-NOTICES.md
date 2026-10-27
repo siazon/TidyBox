@@ -26,3 +26,13 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+## TaskbarLyrics (approach for showing a window on the taskbar)
+
+The vocab strip is embedded in the Windows taskbar by making its window a child of `Shell_TrayWnd`. The approach follows
+ANYNC/TaskbarLyrics (https://github.com/ANYNC/TaskbarLyrics). No code was copied; the implementation is our own.
+
+MIT License
+
+Copyright (c) 2026 anync
