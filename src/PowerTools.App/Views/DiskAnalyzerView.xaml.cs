@@ -262,6 +262,52 @@ public sealed partial class DiskAnalyzerView : Page
         }
     }
 
+    private async void OnRelinkOrphanClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not OrphanFolderRow row) return;
+
+        var appIdBox = new TextBox { Text = _module.GuessAppId(row.Folder) ?? "", PlaceholderText = "Steam appid，例如 413150", Header = "appid" };
+        var dialog = new ContentDialog
+        {
+            Title = $"重新关联“{row.Name}”",
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "会在这个游戏库的 steamapps 下补写一个登记文件（appmanifest），不会修改或删除游戏文件。完成后重启 Steam，它会自行检查文件、只补下载缺失的部分。",
+                        TextWrapping = TextWrapping.Wrap,
+                    },
+                    new TextBlock
+                    {
+                        Text = appIdBox.Text.Length > 0 ? "已根据本机信息填入 appid，请确认。" : "没能自动识别 appid。可到 steamdb.info 搜索游戏名，页面上的 App ID 填到下面。",
+                        TextWrapping = TextWrapping.Wrap,
+                        Opacity = 0.7,
+                    },
+                    appIdBox,
+                },
+            },
+            PrimaryButtonText = "重新关联",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        try
+        {
+            await Task.Run(() => _module.RelinkOrphanFolder(row.Folder, appIdBox.Text));
+            await LoadGamesAsync();
+            StatusText.Text = $"已为“{row.Name}”补写登记文件。请重启 Steam 让它重新识别；如果游戏仍提示更新，属于正常的文件校验。";
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            StatusText.Text = $"重新关联失败：{ex.Message}";
+        }
+    }
+
     private async Task LoadWorkshopResiduesAsync()
     {
         try

@@ -24,26 +24,43 @@ public sealed class SteamAppCache : ISteamAppNameLookup
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PowerTools", "SteamAppCache.json");
     }
 
-    /// <returns>The last known name for this appid, or null if it was never seen.</returns>
-    public string? TryGetName(string appId) => Load().TryGetValue(appId, out var name) ? name : null;
+    private sealed record Entry(string Name, string? InstallDir);
 
-    /// <summary>Remembers (or overwrites) the name for this appid.</summary>
-    public void Upsert(string appId, string name)
+    /// <returns>The last known name for this appid, or null if it was never seen.</returns>
+    public string? TryGetName(string appId) => Load().TryGetValue(appId, out var entry) ? entry.Name : null;
+
+    /// <returns>The appid last seen installed under steamapps/common/&lt;installDir&gt;, or null if none.</returns>
+    public string? TryFindAppIdByInstallDir(string installDir)
+        => installDir.Length == 0
+            ? null
+            : Load().FirstOrDefault(kv => string.Equals(kv.Value.InstallDir, installDir, StringComparison.OrdinalIgnoreCase)).Key;
+
+    /// <summary>Remembers (or overwrites) the name for this appid; a null/empty <paramref name="installDir"/> keeps the one already stored.</summary>
+    public void Upsert(string appId, string name, string? installDir = null)
     {
         lock (_gate)
         {
             var entries = Load();
-            entries[appId] = name;
+            var dir = string.IsNullOrEmpty(installDir) ? (entries.TryGetValue(appId, out var old) ? old.InstallDir : null) : installDir;
+            entries[appId] = new Entry(name, dir);
             Save(entries);
         }
     }
 
-    private Dictionary<string, string> Load()
+    private Dictionary<string, Entry> Load()
     {
         try
         {
             if (!File.Exists(_filePath)) return new();
-            return JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(_filePath)) ?? new();
+
+            var entries = new Dictionary<string, Entry>();
+            foreach (var (appId, value) in JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(_filePath)) ?? new())
+            {
+                // Older files stored just the name as a plain string.
+                var entry = value.ValueKind == JsonValueKind.String ? new Entry(value.GetString() ?? "", null) : value.Deserialize<Entry>();
+                if (entry is not null) entries[appId] = entry;
+            }
+            return entries;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -52,7 +69,7 @@ public sealed class SteamAppCache : ISteamAppNameLookup
         }
     }
 
-    private void Save(Dictionary<string, string> entries)
+    private void Save(Dictionary<string, Entry> entries)
     {
         var dir = Path.GetDirectoryName(_filePath);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);

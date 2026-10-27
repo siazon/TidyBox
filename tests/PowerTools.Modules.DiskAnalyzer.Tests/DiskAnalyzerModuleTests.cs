@@ -151,6 +151,105 @@ public class DiskAnalyzerModuleTests : IDisposable
         Assert.Empty(recycleBin.Deleted);
     }
 
+    private async Task<DiskAnalyzerModule> RelinkModule()
+    {
+        var module = new DiskAnalyzerModule(steamInstallPathOverride: _dir, steamAppCache: new SteamAppCache(_cacheFile));
+        await module.InitializeAsync();
+        return module;
+    }
+
+    [Fact]
+    public async Task RelinkOrphanFolder_WritesManifest_SoTheFolderIsAnInstalledGameAndNoLongerAnOrphan()
+    {
+        MakeGhostFolder(_dir);
+        var module = await RelinkModule();
+        var folder = Assert.Single(module.GetOrphanFolders());
+
+        module.RelinkOrphanFolder(folder, "413150");
+
+        var game = Assert.Single(module.GetSteamGames());
+        Assert.Equal("413150", game.AppId);
+        Assert.Equal("GhostFolder", game.Name); // no cached name -> falls back to the folder name
+        Assert.Equal(folder.FullPath, game.InstallPath);
+        Assert.Empty(module.GetOrphanFolders());
+    }
+
+    [Fact]
+    public async Task RelinkOrphanFolder_UsesCachedNameWhenKnown()
+    {
+        MakeGhostFolder(_dir);
+        new SteamAppCache(_cacheFile).Upsert("413150", "Stardew Valley");
+        var module = await RelinkModule();
+
+        module.RelinkOrphanFolder(Assert.Single(module.GetOrphanFolders()), "413150");
+
+        Assert.Equal("Stardew Valley", Assert.Single(module.GetSteamGames()).Name);
+    }
+
+    [Fact]
+    public async Task RelinkOrphanFolder_AppIdAlreadyInstalledElsewhere_IsRejectedWithoutWriting()
+    {
+        MakeGhostFolder(_dir);
+        var module = await RelinkModule();
+        var folder = Assert.Single(module.GetOrphanFolders());
+        File.WriteAllText(Path.Combine(_dir, "steamapps", "appmanifest_730.acf"),
+            "\"AppState\"\n{\n\"appid\" \"730\"\n\"name\" \"CS\"\n\"installdir\" \"CS\"\n\"SizeOnDisk\" \"1\"\n\"LastUpdated\" \"1700000000\"\n}");
+
+        Assert.Throws<InvalidOperationException>(() => module.RelinkOrphanFolder(folder, "730"));
+        Assert.Single(Directory.GetFiles(Path.Combine(_dir, "steamapps"), "appmanifest_*.acf"));
+    }
+
+    [Fact]
+    public async Task RelinkOrphanFolder_InvalidAppId_Throws()
+    {
+        MakeGhostFolder(_dir);
+        var module = await RelinkModule();
+        var folder = Assert.Single(module.GetOrphanFolders());
+
+        Assert.Throws<ArgumentException>(() => module.RelinkOrphanFolder(folder, "not-a-number"));
+    }
+
+    [Fact]
+    public async Task RelinkOrphanFolder_PathNotUnderAnyKnownLibrary_IsRejectedWithoutWriting()
+    {
+        var module = await RelinkModule();
+        Directory.CreateDirectory(Path.Combine(_dir, "steamapps"));
+        var tampered = new OrphanGameFolder(_dir, "X", @"C:\Windows\System32", 0, DateTime.UtcNow);
+
+        Assert.Throws<ArgumentException>(() => module.RelinkOrphanFolder(tampered, "1"));
+        Assert.Empty(Directory.GetFiles(Path.Combine(_dir, "steamapps"), "appmanifest_*.acf"));
+    }
+
+    [Fact]
+    public async Task GuessAppId_SteamAppIdTxtInFolder_IsUsed()
+    {
+        var ghost = MakeGhostFolder(_dir);
+        File.WriteAllText(Path.Combine(ghost, "steam_appid.txt"), "413150\r\n");
+        Directory.SetLastWriteTimeUtc(ghost, DateTime.UtcNow.AddDays(-1)); // writing the file just refreshed the "recently changed" guard
+        var module = await RelinkModule();
+
+        Assert.Equal("413150", module.GuessAppId(Assert.Single(module.GetOrphanFolders())));
+    }
+
+    [Fact]
+    public async Task GuessAppId_NoFile_FallsBackToCachedInstallDir()
+    {
+        MakeGhostFolder(_dir);
+        new SteamAppCache(_cacheFile).Upsert("99", "Ghost Game", "GhostFolder");
+        var module = await RelinkModule();
+
+        Assert.Equal("99", module.GuessAppId(Assert.Single(module.GetOrphanFolders())));
+    }
+
+    [Fact]
+    public async Task GuessAppId_NothingKnown_ReturnsNull()
+    {
+        MakeGhostFolder(_dir);
+        var module = await RelinkModule();
+
+        Assert.Null(module.GuessAppId(Assert.Single(module.GetOrphanFolders())));
+    }
+
     private static string MakeWorkshopFolder(string libraryDir, string appId)
     {
         var path = Path.Combine(libraryDir, "steamapps", "workshop", "content", appId);

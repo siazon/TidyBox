@@ -243,6 +243,7 @@
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto" />
                                                     <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
                                                 </Grid.ColumnDefinitions>
                                                 <CheckBox IsChecked="{x:Bind IsChecked, Mode=TwoWay}" MinWidth="0"
                                                           AutomationProperties.Name="{x:Bind Name}" />
@@ -250,6 +251,13 @@
                                                     <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
                                                     <TextBlock Text="{x:Bind Detail}" Opacity="0.6" FontSize="12" TextWrapping="Wrap" />
                                                 </StackPanel>
+                                                <Button Grid.Column="2" Click="OnRelinkOrphanClick" AutomationProperties.Name="重新关联"
+                                                        ToolTipService.ToolTip="这其实是个还在用的游戏？补写 Steam 的登记文件，让 Steam 重新认出它，不用重新下载">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <FontIcon Glyph="&#xE71B;" FontSize="14" />
+                                                        <TextBlock Text="重新关联" />
+                                                    </StackPanel>
+                                                </Button>
                                             </Grid>
                                         </DataTemplate>
                                     </ListView.ItemTemplate>

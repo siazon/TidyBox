@@ -76,4 +76,46 @@ public class SteamAppCacheTests : IDisposable
 
         Assert.Null(new SteamAppCache(_file).TryGetName("1"));
     }
+
+    [Fact]
+    public void TryFindAppIdByInstallDir_AfterUpsertWithInstallDir_ReturnsAppIdIgnoringCase()
+    {
+        var cache = new SteamAppCache(_file);
+        cache.Upsert("413150", "Stardew Valley", "Stardew Valley");
+
+        Assert.Equal("413150", new SteamAppCache(_file).TryFindAppIdByInstallDir("stardew valley"));
+    }
+
+    [Fact]
+    public void TryFindAppIdByInstallDir_UnknownOrEmpty_ReturnsNull()
+    {
+        var cache = new SteamAppCache(_file);
+        cache.Upsert("1", "No Install Dir");
+
+        Assert.Null(cache.TryFindAppIdByInstallDir("Whatever"));
+        Assert.Null(cache.TryFindAppIdByInstallDir(""));
+    }
+
+    [Fact]
+    public void Upsert_WithoutInstallDir_KeepsThePreviouslyStoredOne()
+    {
+        var cache = new SteamAppCache(_file);
+        cache.Upsert("1", "Game", "GameDir");
+
+        cache.Upsert("1", "Game Renamed");
+
+        Assert.Equal("1", cache.TryFindAppIdByInstallDir("GameDir"));
+        Assert.Equal("Game Renamed", cache.TryGetName("1"));
+    }
+
+    [Fact]
+    public void Load_LegacyFileOfPlainNames_StillReadable()
+    {
+        File.WriteAllText(_file, """{"413150":"Stardew Valley"}""");
+
+        var cache = new SteamAppCache(_file);
+
+        Assert.Equal("Stardew Valley", cache.TryGetName("413150"));
+        Assert.Null(cache.TryFindAppIdByInstallDir("Stardew Valley"));
+    }
 }

@@ -99,7 +99,7 @@ public class DiskAnalyzerModule : IToolModule
             {
                 try
                 {
-                    cache.Upsert(game.AppId, game.Name);
+                    cache.Upsert(game.AppId, game.Name, Path.GetFileName(game.InstallPath));
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
@@ -195,6 +195,49 @@ public class DiskAnalyzerModule : IToolModule
         }
 
         return Task.Run(() => _recycleBin.Delete(folder.FullPath), ct);
+    }
+
+    /// <summary>
+    /// Best local guess at an orphan folder's appid: the game's own steam_appid.txt, else the appid this
+    /// folder name was last seen installed under. Null when neither knows; the caller then asks the user.
+    /// </summary>
+    public string? GuessAppId(OrphanGameFolder folder)
+    {
+        try
+        {
+            var file = Path.Combine(folder.FullPath, "steam_appid.txt");
+            if (File.Exists(file) && uint.TryParse(File.ReadAllText(file).Trim(), out var id) && id > 0) return id.ToString();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Unreadable hint file: fall through to the cache.
+        }
+
+        return (_steamAppCache as SteamAppCache)?.TryFindAppIdByInstallDir(folder.FolderName);
+    }
+
+    /// <summary>
+    /// Re-creates the folder's appmanifest so Steam recognises the existing files again (restart Steam to pick
+    /// it up). The folder is re-checked to be directly under a current library's steamapps/common, and the appid
+    /// must not already belong to an installed game; an existing manifest is never overwritten.
+    /// </summary>
+    public void RelinkOrphanFolder(OrphanGameFolder folder, string appId)
+    {
+        var library = GetLibraryFolders().FirstOrDefault(lib => IsDirectChildOf(folder.FullPath, Path.Combine(lib, "steamapps", "common")));
+        if (library is null)
+        {
+            throw new ArgumentException($"'{folder.FullPath}' is not under a known Steam library's steamapps/common.", nameof(folder));
+        }
+
+        var id = SteamManifestWriter.NormalizeAppId(appId);
+        if (GetSteamGames().Any(g => g.AppId == id))
+        {
+            throw new InvalidOperationException($"appid {id} already belongs to an installed game.");
+        }
+
+        var installDir = Path.GetFileName(Path.GetFullPath(folder.FullPath));
+        var name = _steamAppCache.TryGetName(id) ?? installDir;
+        SteamManifestWriter.Write(library, id, name, installDir, folder.SizeBytes);
     }
 
     // Orphan folders are always a direct child of steamapps/common; a tampered request pointing anywhere else is rejected.
