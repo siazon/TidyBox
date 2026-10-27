@@ -95,6 +95,25 @@ public partial class App : Application
         });
         _analyzeRequests.Start();
 
+        // The strip is a window of its own, so it would keep the process alive after the main window is gone.
+        main.Closed += (_, _) =>
+        {
+            VocabStrip.Hide();
+            _analyzeRequests?.Dispose();
+            _singleInstance?.Dispose();
+            Exit();
+        };
+
         main.Activate();
+        RestoreVocabStrip();
+    }
+
+    // Brings the strip back if it was showing when the app last ran. A word list that has gone missing is left as saved:
+    // nothing is shown this time, and the Vocab page says why when it is opened.
+    private static void RestoreVocabStrip()
+    {
+        if (!VocabSettings.Enabled || VocabSettings.Path is not { Length: > 0 } path) return;
+
+        if (Vocab.Load(path) && Vocab.Start() && !VocabStrip.Show()) Vocab.Stop();
     }
 }
