@@ -42,4 +42,22 @@ public class LaunchRequestTests
     {
         Assert.Null(LaunchRequest.GetAnalyzePath(args));
     }
+
+    [Theory]
+    [InlineData("--activate")]
+    [InlineData(" --ACTIVATE \n")]
+    public void IsActivate_is_true_for_the_token_ignoring_case_and_whitespace(string message)
+    {
+        Assert.True(LaunchRequest.IsActivate(message));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(@"C:\Users\x")]
+    [InlineData("--analyze")]
+    public void IsActivate_is_false_for_paths_and_empty_input(string? message)
+    {
+        Assert.False(LaunchRequest.IsActivate(message));
+    }
 }

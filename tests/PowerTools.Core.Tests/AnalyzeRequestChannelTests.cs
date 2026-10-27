@@ -56,6 +56,16 @@ public sealed class AnalyzeRequestChannelTests : IDisposable
     }
 
     [Fact]
+    public void An_activate_message_is_delivered_like_any_other_text()
+    {
+        var (_, received) = Listen();
+
+        Assert.True(AnalyzeRequestSender.TrySend(_pipe, LaunchRequest.ActivateMessage, Patience));
+
+        Assert.Equal("--activate", received.Next());
+    }
+
+    [Fact]
     public void Several_requests_in_a_row_all_arrive_in_order()
     {
         var (_, received) = Listen();
