@@ -282,9 +282,17 @@ public sealed partial class DiskAnalyzerView : Page
                     },
                     new TextBlock
                     {
-                        Text = appIdBox.Text.Length > 0 ? "已根据本机信息填入 appid，请确认。" : "没能自动识别 appid。可到 steamdb.info 搜索游戏名，页面上的 App ID 填到下面。",
+                        Text = appIdBox.Text.Length > 0
+                            ? "已根据本机信息填入 appid，请确认它就是这个游戏。"
+                            : "没能自动识别 appid。点下面的链接搜索，把结果页上的 App ID 填到输入框，并确认它就是这个游戏（填错会让 Steam 下载别的游戏）。",
                         TextWrapping = TextWrapping.Wrap,
                         Opacity = 0.7,
+                    },
+                    new HyperlinkButton
+                    {
+                        Content = $"在 SteamDB 搜索“{row.Folder.FolderName}”",
+                        NavigateUri = new Uri("https://steamdb.info/search/?a=app&q=" + Uri.EscapeDataString(row.Folder.FolderName)),
+                        Padding = new Thickness(0),
                     },
                     appIdBox,
                 },
@@ -296,9 +304,10 @@ public sealed partial class DiskAnalyzerView : Page
         };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
 
+        var appId = appIdBox.Text; // TextBox is UI-thread-only; read it before hopping to Task.Run
         try
         {
-            await Task.Run(() => _module.RelinkOrphanFolder(row.Folder, appIdBox.Text));
+            await Task.Run(() => _module.RelinkOrphanFolder(row.Folder, appId));
             await LoadGamesAsync();
             StatusText.Text = $"已为“{row.Name}”补写登记文件。请重启 Steam 让它重新识别；如果游戏仍提示更新，属于正常的文件校验。";
         }
