@@ -5,6 +5,8 @@ using PowerTools.Core.Modules;
 using PowerTools.Modules.ContextMenu;
 using PowerTools.Modules.DiskAnalyzer;
 using PowerTools.Modules.Uninstaller;
+using PowerTools.Modules.Vocab;
+using PowerTools.App.TaskbarStrip;
 
 namespace PowerTools.App;
 
@@ -18,6 +20,11 @@ public partial class App : Application
 
     public static ModuleRegistry Modules { get; } = new();
 
+    /// <summary>The vocab module and the strip that shows it live here, not on the page: the page is rebuilt on every visit.</summary>
+    public static VocabModule Vocab { get; } = new();
+
+    internal static TaskbarStripHost VocabStrip { get; } = new(Vocab);
+
     /// <summary>The shell window; pages need it for picker dialogs.</summary>
     public static Window? CurrentWindow { get; private set; }
 
@@ -29,6 +36,7 @@ public partial class App : Application
         // The icon sits in the install folder, which has the version in its name; the module repoints the menu after updates.
         Modules.Register(new ContextMenuModule(analyzeIcon: Path.Combine(AppContext.BaseDirectory, "Assets", "PowerTools.ico")));
         Modules.Register(new UninstallerModule());
+        Modules.Register(Vocab);
     }
 
     private static string? _pendingAnalyzePath;

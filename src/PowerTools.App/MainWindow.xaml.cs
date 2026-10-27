@@ -14,6 +14,7 @@ public sealed partial class MainWindow : Window
         ["disk-analyzer"] = typeof(DiskAnalyzerView),
         ["context-menu"] = typeof(ContextMenuView),
         ["uninstaller"] = typeof(UninstallerView),
+        ["vocab"] = typeof(VocabView),
     };
 
     // Segoe Fluent Icons glyphs for the nav items; a module without an entry just shows no icon.
@@ -22,6 +23,7 @@ public sealed partial class MainWindow : Window
         ["disk-analyzer"] = "\uEDA2", // HardDrive
         ["context-menu"] = "\uF2C7",  // BulletedList2
         ["uninstaller"] = "\uEC91",   // Uninstall
+        ["vocab"] = "\uE8F1",         // Library
     };
 
     private readonly ModuleRegistry _registry;
