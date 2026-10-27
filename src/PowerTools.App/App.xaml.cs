@@ -14,6 +14,7 @@ public partial class App : Application
 
     private Window? _window;
     private AnalyzeRequestListener? _analyzeRequests;
+    private SingleInstanceGuard? _singleInstance; // held for the life of the process: it is what makes this copy "the" running one
 
     public static ModuleRegistry Modules { get; } = new();
 
@@ -51,16 +52,17 @@ public partial class App : Application
     {
         _pendingAnalyzePath = LaunchRequest.GetAnalyzePath(Environment.GetCommandLineArgs());
 
-        // Started by the right-click menu while the app is already open: hand the folder to that window and leave.
-        if (_pendingAnalyzePath is { } requested)
+        // Decided before anything else is created, so a second copy never opens a window or starts the vocab strip.
+        _singleInstance = new SingleInstanceGuard(SingleInstanceGuard.DefaultName);
+        if (!_singleInstance.IsPrimary)
         {
-            // This copy was started by the user's click, so it may let the running one come to the front.
+            // This copy was started by the user, so it may let the running one come to the front. The running copy may
+            // still be starting up and not listening yet; sending waits for its pipe for a few seconds.
             AllowSetForegroundWindow(AsfwAny);
-            if (AnalyzeRequestSender.TrySend(AnalyzeRequestListener.DefaultPipeName, requested, TimeSpan.FromMilliseconds(250)))
-            {
-                Exit();
-                return;
-            }
+            AnalyzeRequestSender.TrySend(AnalyzeRequestListener.DefaultPipeName, _pendingAnalyzePath ?? LaunchRequest.ActivateMessage, TimeSpan.FromSeconds(3));
+            _singleInstance.Dispose();
+            Exit();
+            return;
         }
 
         var main = new MainWindow(Modules);
@@ -78,9 +80,10 @@ public partial class App : Application
             };
         }
 
-        _analyzeRequests = new AnalyzeRequestListener(AnalyzeRequestListener.DefaultPipeName, path =>
+        _analyzeRequests = new AnalyzeRequestListener(AnalyzeRequestListener.DefaultPipeName, message =>
         {
-            if (Path.IsPathFullyQualified(path)) main.DispatcherQueue.TryEnqueue(() => main.OpenInDiskAnalyzer(path));
+            if (LaunchRequest.IsActivate(message)) main.DispatcherQueue.TryEnqueue(main.BringToFront);
+            else if (Path.IsPathFullyQualified(message)) main.DispatcherQueue.TryEnqueue(() => main.OpenInDiskAnalyzer(message));
         });
         _analyzeRequests.Start();
 

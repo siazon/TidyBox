@@ -59,7 +59,7 @@ public sealed partial class MainWindow : Window
         if (item is not null) Nav.SelectedItem = item;
     }
 
-    private void BringToFront()
+    public void BringToFront()
     {
         if (AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter) presenter.Restore();
         Activate();
