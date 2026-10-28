@@ -20,13 +20,25 @@ public sealed partial class SettingsView : Page
         InitializeComponent();
     }
 
+    private bool _feedbackDialogOpen;
+
     private async void OnSendFeedbackClick(object sender, RoutedEventArgs e)
     {
-        if (FeedbackConfig.ResolveEndpoint() is not { } endpoint) return;
+        // A fast double-click queues a second click before the first dialog's overlay exists, and ShowAsync throws when a
+        // ContentDialog is already open — from an async void handler, which takes the whole app down.
+        if (_feedbackDialogOpen || FeedbackConfig.ResolveEndpoint() is not { } endpoint) return;
 
-        var dialog = new FeedbackDialog(FeedbackClient.Create(endpoint)) { XamlRoot = XamlRoot };
-        await dialog.ShowAsync();
-        FeedbackStatusText.Text = dialog.WasSent ? "已发送，谢谢你的反馈。" : string.Empty;
+        _feedbackDialogOpen = true;
+        try
+        {
+            var dialog = new FeedbackDialog(FeedbackClient.Create(endpoint)) { XamlRoot = XamlRoot };
+            await dialog.ShowAsync();
+            FeedbackStatusText.Text = dialog.WasSent ? "已发送，谢谢你的反馈。" : string.Empty;
+        }
+        finally
+        {
+            _feedbackDialogOpen = false;
+        }
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)

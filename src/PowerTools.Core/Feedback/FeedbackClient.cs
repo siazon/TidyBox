@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -7,7 +8,14 @@ namespace PowerTools.Core.Feedback;
 /// <summary>Sends one feedback to the feedback server and says what came of it; it never throws for a network problem.</summary>
 public sealed class FeedbackClient
 {
-    private static readonly JsonSerializerOptions Json = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+    // The default encoder writes every non-ASCII character as \uXXXX (6 bytes for a 3-byte Chinese character) and also
+    // escapes <, >, + and ' — which would push a legitimate report past the server's body limit. This body is JSON for a
+    // server, never HTML, so the relaxed escaping is safe; quotes and control characters are still escaped.
+    private static readonly JsonSerializerOptions Json = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
 
     private readonly HttpClient _http;
     private readonly Uri _endpoint;

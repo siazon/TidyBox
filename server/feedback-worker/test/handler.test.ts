@@ -104,6 +104,23 @@ describe('routing', () => {
 });
 
 describe('rejecting', () => {
+  it('answers 415 to a body that is not declared as JSON and stores nothing', async () => {
+    // A web page can send text/plain across origins without a preflight; only the real client sends JSON.
+    for (const type of ['text/plain', 'application/x-www-form-urlencoded', '']) {
+      const response = await handleRequest(post(valid, { headers: { 'content-type': type } }), env, NOW);
+
+      expect(response.status).toBe(415);
+      expect(await response.json()).toEqual({ error: 'unsupported_media_type' });
+    }
+    expect(await count()).toBe(0);
+  });
+
+  it('accepts a JSON content type with parameters', async () => {
+    const response = await handleRequest(post(valid, { headers: { 'content-type': 'application/json; charset=utf-8' } }), env, NOW);
+
+    expect(response.status).toBe(201);
+  });
+
   it('answers 400 to a broken JSON body and stores nothing', async () => {
     const response = await handleRequest(post(undefined, { raw: '{ not json' }), env, NOW);
 
@@ -168,6 +185,25 @@ describe('rate limits', () => {
     const later = new Date(NOW.getTime() + 61 * 60 * 1000);
 
     expect((await handleRequest(post(valid), env, later)).status).toBe(201);
+  });
+
+  it('holds the limit when requests arrive at the same moment', async () => {
+    const answers = await Promise.all(Array.from({ length: 12 }, () => handleRequest(post(valid), env, NOW)));
+
+    const statuses = answers.map((a) => a.status).sort();
+    expect(statuses.filter((s) => s === 201)).toHaveLength(RATE.perIpPerHour);
+    expect(statuses.filter((s) => s === 429)).toHaveLength(12 - RATE.perIpPerHour);
+    expect(await count()).toBe(RATE.perIpPerHour);
+  });
+
+  it('counts every address of one IPv6 /64 as the same sender', async () => {
+    const inside = ['2001:db8:1:2::1', '2001:db8:1:2:aaaa:bbbb:cccc:dddd', '2001:db8:1:2::ffff'];
+    for (let i = 0; i < RATE.perIpPerHour; i++) {
+      expect((await handleRequest(post(valid, { ip: inside[i % inside.length] }), env, NOW)).status).toBe(201);
+    }
+
+    expect((await handleRequest(post(valid, { ip: '2001:db8:1:2:1:2:3:4' }), env, NOW)).status).toBe(429);
+    expect((await handleRequest(post(valid, { ip: '2001:db8:1:3::1' }), env, NOW)).status).toBe(201); // another /64
   });
 
   it('answers 503 once the whole site has taken 2000 in a day', async () => {

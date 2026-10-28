@@ -144,7 +144,8 @@ public partial class App : Application
         };
 
         main.Activate();
-        RestoreVocabStrip();    }
+        RestoreVocabStrip();
+    }
 
     // Brings the strip back if it was showing when the app last ran. A word list that has gone missing is left as saved:
     // nothing is shown this time, and the Vocab page says why when it is opened.

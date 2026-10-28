@@ -121,6 +121,29 @@ public class FeedbackClientTests
     }
 
     [Fact]
+    public async Task A_worst_case_chinese_report_still_fits_the_servers_body_limit()
+    {
+        // JSON written with the default encoder spells every Chinese character as \uXXXX (6 bytes instead of 3), which
+        // would push a message and a log that are each within their own limit past the server's 128 KB.
+        var (client, handler) = Make();
+        var logs = new string('中', 21845); // 65535 bytes of UTF-8
+
+        await client.SendAsync(Submission(FeedbackKind.Error, new string('中', FeedbackLimits.MaxMessageChars), logs: logs), CancellationToken.None);
+
+        Assert.True(Encoding.UTF8.GetByteCount(handler.Body!) <= 131072, $"body was {Encoding.UTF8.GetByteCount(handler.Body!)} bytes");
+    }
+
+    [Fact]
+    public async Task Redaction_tokens_and_ordinary_punctuation_are_not_escaped()
+    {
+        var (client, handler) = Make();
+
+        await client.SendAsync(Submission(FeedbackKind.Error, logs: "user=<user> host=<machine> a+b & c's"), CancellationToken.None);
+
+        Assert.Contains("user=<user> host=<machine> a+b & c's", handler.Body);
+    }
+
+    [Fact]
     public async Task A_201_means_sent()
     {
         var (client, _) = Make();

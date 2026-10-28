@@ -66,13 +66,16 @@
 | `appVersion` | string | 形如 `1.2.3.4`（四段数字，每段 1–5 位） |
 | `logs` | string? | 只允许 `kind == "error"`；UTF-8 最长 65536 字节 |
 
-整个请求体最长 128 KB。
+整个请求体最长 128 KB。必须声明 `Content-Type: application/json`（网页可以不经预检就向任意地址发 `text/plain`，不检查就等于让任何网页借访客的浏览器写入）。
+
+限流键：IPv4 用地址本身，IPv6 取前 64 位（/64），因为一条家庭/VPS 线路会拿到整个 /64，用完整地址等于让一台机器随意变换“身份”。限额检查与写入在同一条 SQL 里完成，避免同时到达的请求都看到“还有余量”。
 
 | 状态码 | 含义 | 响应体 |
 |---|---|---|
 | 201 | 已保存 | `{"id": <number>}` |
 | 400 | JSON 无效或字段不合规 | `{"error":"invalid_request","field":"<字段名>"}` |
 | 404 / 405 | 路径不对 / 不是 POST | `{"error":"not_found"}` / `{"error":"method_not_allowed"}` |
+| 415 | `Content-Type` 不是 `application/json` | `{"error":"unsupported_media_type"}` |
 | 413 | 请求体或日志过大 | `{"error":"too_large"}` |
 | 429 | 该 IP 哈希一小时内已达 5 条 | `{"error":"rate_limited"}` |
 | 503 | 全站当天已达 2000 条 | `{"error":"busy"}` |

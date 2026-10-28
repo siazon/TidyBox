@@ -1,3 +1,4 @@
+import { senderKey } from './sender';
 import { LIMITS, validateFeedback } from './validate';
 
 export interface Env {
@@ -49,6 +50,12 @@ export async function handleRequest(request: Request, env: Env, now: Date = new 
   if (new URL(request.url).pathname !== '/v1/feedback') return json(404, { error: 'not_found' });
   if (request.method !== 'POST') return json(405, { error: 'method_not_allowed' }, { allow: 'POST' });
 
+  // A web page can POST text/plain to any address without the browser asking first (no CORS preflight), so a missing or
+  // other content type is how a page using its visitors' browsers would get in. The real client always sends JSON.
+  if (!(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) {
+    return json(415, { error: 'unsupported_media_type' });
+  }
+
   const text = await readLimited(request, LIMITS.maxBodyBytes);
   if (text === null) return json(413, { error: 'too_large' });
 
@@ -64,28 +71,29 @@ export async function handleRequest(request: Request, env: Env, now: Date = new 
     return json(result.status, result.status === 413 ? { error: result.error } : { error: result.error, field: result.field });
   }
 
-  const ipHash = await sha256Hex(env.IP_HASH_SALT + (request.headers.get('CF-Connecting-IP') ?? 'unknown'));
+  const ipHash = await sha256Hex(env.IP_HASH_SALT + senderKey(request.headers.get('CF-Connecting-IP') ?? 'unknown'));
   const hourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
   const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
 
   try {
+    // Checking the limits and inserting are ONE statement: separate "count, then insert" steps let requests that arrive
+    // together all see room and all get in. SQLite runs a single statement as a unit.
+    const { kind, message, contact, appVersion, logs } = result.value;
+    const run = await env.DB.prepare(
+      `INSERT INTO feedback (created_at, kind, message, contact, app_version, logs, ip_hash)
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7
+       WHERE (SELECT COUNT(*) FROM feedback WHERE ip_hash = ?7 AND created_at > ?8) < ?9
+         AND (SELECT COUNT(*) FROM feedback WHERE created_at > ?10) < ?11`,
+    )
+      .bind(now.toISOString(), kind, message, contact, appVersion, logs, ipHash, hourAgo, RATE.perIpPerHour, dayAgo, RATE.globalPerDay)
+      .run();
+    if (run.meta.changes > 0) return json(201, { id: run.meta.last_row_id });
+
+    // Nothing was inserted, so a limit was reached; find out which (the per-sender one is reported first).
     const fromThisIp = await env.DB.prepare('SELECT COUNT(*) AS n FROM feedback WHERE ip_hash = ?1 AND created_at > ?2')
       .bind(ipHash, hourAgo)
       .first<{ n: number }>();
-    if ((fromThisIp?.n ?? 0) >= RATE.perIpPerHour) return json(429, { error: 'rate_limited' });
-
-    const fromEveryone = await env.DB.prepare('SELECT COUNT(*) AS n FROM feedback WHERE created_at > ?1')
-      .bind(dayAgo)
-      .first<{ n: number }>();
-    if ((fromEveryone?.n ?? 0) >= RATE.globalPerDay) return json(503, { error: 'busy' });
-
-    const { kind, message, contact, appVersion, logs } = result.value;
-    const run = await env.DB.prepare(
-      'INSERT INTO feedback (created_at, kind, message, contact, app_version, logs, ip_hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)',
-    )
-      .bind(now.toISOString(), kind, message, contact, appVersion, logs, ipHash)
-      .run();
-    return json(201, { id: run.meta.last_row_id });
+    return (fromThisIp?.n ?? 0) >= RATE.perIpPerHour ? json(429, { error: 'rate_limited' }) : json(503, { error: 'busy' });
   } catch {
     return json(500, { error: 'server_error' });
   }

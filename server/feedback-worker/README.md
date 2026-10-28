@@ -53,3 +53,15 @@ Delete one (for example when a user asks): `npx wrangler d1 execute feedback --r
 
 Per IP hash: 5 feedbacks per hour. Whole site: 2000 per day. The endpoint is public (a desktop app cannot keep a
 secret), so these limits are what stands between it and a script.
+
+## Storage and cost
+
+Rows are never deleted automatically. Within the limits one accepted feedback is at most about 70 KB (4000 characters of
+text plus 64 KB of log), and the site-wide cap is 2000 a day, so the worst case is on the order of 100+ MB a day if the
+endpoint is being abused. Cloudflare's free D1 plan has a database size limit and a rows-read quota (check the current
+numbers in the Cloudflare docs); when the database is full inserts fail and the app tells the user it cannot connect.
+
+- Check the size now and then: `npx wrangler d1 info feedback`.
+- Clean up old rows: `npx wrangler d1 execute feedback --remote --command "DELETE FROM feedback WHERE created_at < '2027-01-01'"`.
+- If you see abuse, lower `RATE.globalPerDay` in `src/handler.ts`, or add a Cloudflare WAF rate-limiting rule in front of
+  the Worker.
