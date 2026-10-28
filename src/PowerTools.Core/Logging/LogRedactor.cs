@@ -8,13 +8,19 @@ public static class LogRedactor
 
     /// <summary>
     /// The profile folder becomes <c>%USERPROFILE%</c>, the user name <c>&lt;user&gt;</c> and the machine name
-    /// <c>&lt;machine&gt;</c>, ignoring case. The profile goes first, so a path under it is not rewritten twice.
+    /// <c>&lt;machine&gt;</c>, ignoring case. The profile goes first, so a path under it is not rewritten twice; of the two
+    /// names the longer goes first, because a machine name often contains the user name ("alice-PC") and replacing the
+    /// shorter one first would leave the rest of the machine name behind.
     /// </summary>
     public static string Redact(string text, string? userProfile, string? userName, string? machineName)
     {
         if (Usable(userProfile)) text = text.Replace(userProfile!.TrimEnd('\\', '/'), "%USERPROFILE%", StringComparison.OrdinalIgnoreCase);
-        if (Usable(userName)) text = text.Replace(userName!, "<user>", StringComparison.OrdinalIgnoreCase);
-        if (Usable(machineName)) text = text.Replace(machineName!, "<machine>", StringComparison.OrdinalIgnoreCase);
+
+        var names = new[] { (Name: userName, Token: "<user>"), (Name: machineName, Token: "<machine>") }
+            .Where(n => Usable(n.Name))
+            .OrderByDescending(n => n.Name!.Length);
+        foreach (var (name, token) in names) text = text.Replace(name!, token, StringComparison.OrdinalIgnoreCase);
+
         return text;
     }
 

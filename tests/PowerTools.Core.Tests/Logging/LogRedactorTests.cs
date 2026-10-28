@@ -29,6 +29,15 @@ public class LogRedactorTests
     }
 
     [Fact]
+    public void A_machine_name_that_contains_the_user_name_is_replaced_whole()
+    {
+        // Replacing the shorter name first would leave "-PC1" of the machine name behind.
+        var result = LogRedactor.Redact("host=alice-PC1 user=Alice", null, "Alice", "alice-PC1");
+
+        Assert.Equal("host=<machine> user=<user>", result);
+    }
+
+    [Fact]
     public void The_machine_name_is_replaced()
     {
         Assert.Equal("crash on <machine>", LogRedactor.Redact("crash on DESKTOP-ABC1", null, null, "desktop-abc1"));
