@@ -2,6 +2,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using PowerTools.App.Views;
+using PowerTools.Core.Logging;
 using PowerTools.Core.Modules;
 
 namespace PowerTools.App;
@@ -90,6 +91,7 @@ public sealed partial class MainWindow : Window
             }
             catch (Exception ex)
             {
+                AppLog.Default.Error("module", $"{module.ModuleId} failed to load", ex);
                 var failed = new NavigationViewItem
                 {
                     Content = $"{module.DisplayName} (failed to load)",

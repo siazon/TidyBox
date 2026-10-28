@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Microsoft.UI.Xaml;
 using PowerTools.Core.Launch;
+using PowerTools.Core.Logging;
 using PowerTools.Core.Modules;
 using PowerTools.Modules.ContextMenu;
 using PowerTools.Modules.DiskAnalyzer;
@@ -31,6 +32,12 @@ public partial class App : Application
     public App()
     {
         InitializeComponent();
+
+        // Only recorded, never marked handled: the app still crashes as before, but the log says why.
+        UnhandledException += (_, e) => AppLog.Default.Error("unhandled", "UnhandledException: " + e.Message, e.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, e) => AppLog.Default.Error("unhandled", "AppDomain.UnhandledException", e.ExceptionObject as Exception);
+        TaskScheduler.UnobservedTaskException += (_, e) => AppLog.Default.Error("unhandled", "UnobservedTaskException", e.Exception);
+
         Modules.Register(new DiskAnalyzerModule());
 
         // The icon sits in the install folder, which has the version in its name; the module repoints the menu after updates.
@@ -103,6 +110,8 @@ public partial class App : Application
             return;
         }
 
+        AppLog.Default.Info("app", $"PowerTools {AppVersion.Current} started");
+
         var main = new MainWindow(Modules);
         _window = main;
         CurrentWindow = main;
@@ -135,8 +144,7 @@ public partial class App : Application
         };
 
         main.Activate();
-        RestoreVocabStrip();
-    }
+        RestoreVocabStrip();    }
 
     // Brings the strip back if it was showing when the app last ran. A word list that has gone missing is left as saved:
     // nothing is shown this time, and the Vocab page says why when it is opened.

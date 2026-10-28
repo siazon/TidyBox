@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Microsoft.UI.Dispatching;
+using PowerTools.Core.Logging;
 using PowerTools.Modules.Vocab;
 
 namespace PowerTools.App.TaskbarStrip;
@@ -96,6 +97,7 @@ internal sealed class TaskbarStripHost
         if (!embedded)
         {
             Error = "无法嵌入任务栏";
+            AppLog.Default.Error("vocab-strip", "could not embed the strip in the taskbar");
             CloseWindow(window);
             return false;
         }
