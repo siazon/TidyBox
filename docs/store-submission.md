@@ -66,7 +66,7 @@
 | 图标/Logo | 已换成原创的饼图（磁贴、任务栏、Store Logo、启动画面、窗口左上角、程序文件图标、右键菜单图标，源文件 `Assets\PowerTools.ico` 和 `Assets\*.png`） | 脚手架原来那个图形太像别家的商标，已不再使用。上架前如有正式设计，替换这些文件即可 |
 | 应用内占位图标 | 列表里找不到应用图标时显示 Fluent 的 `store-microsoft-20-filled`（MIT） | 形状接近 Microsoft Store 的购物袋，有商标顾虑（政策 11.2 对第三方名称和 Logo 有要求）。上架前建议换成一个通用的、非品牌的图形 |
 | 第三方声明 | `THIRD-PARTY-NOTICES.md` 已含 Fluent UI System Icons (MIT) | 提交前核对依赖里其余许可证（WindowsAppSDK 等）是否都已列出 |
-| 隐私政策 | 应用不联网、不收集个人数据 | 在 Partner Center 如实填写；如果表单要求链接，准备一个简短的静态页面 |
+| 隐私政策 | 默认不联网、不收集数据。**设置页的“发送反馈”上线后**（`FeedbackConfig.Endpoint` 非空），只在用户点击“发送”时联网，发送：用户写的内容、可选联系方式、PowerTools 版本号，以及（用户选“错误”并勾选时）脱敏后的运行日志；服务器只存 IP 的哈希。不收集系统版本、设备标识、使用统计 | 在 Partner Center 的隐私声明表单里按实际选项如实填写（反馈上线前仍可按“不联网”填，上线后必须改）；如果表单要求隐私政策链接，把 `docs/privacy-policy.md` 发布成一个静态页面（GitHub Pages、Cloudflare Pages 都行）。该页内容必须与实现保持一致 |
 | 年龄分级 | — | 填问卷即可，无敏感内容 |
 | WACK | 未跑 | 提交前用 Windows App Certification Kit 对最终包跑一遍 |
 | Pro 解锁 | 尚未实现内购 | 若 V1 带 Pro，需实现 Store 内购并在认证备注里说明如何测试；若 V1 全免费，先不声明 |
