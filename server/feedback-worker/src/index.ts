@@ -1,6 +1,7 @@
-// Placeholder entry so the Worker config resolves; the real handler arrives in the next task.
+import { handleRequest, type Env } from './handler';
+
 export default {
-  fetch(): Response {
-    return new Response('not implemented', { status: 501 });
+  fetch(request: Request, env: Env): Promise<Response> {
+    return handleRequest(request, env);
   },
 };
