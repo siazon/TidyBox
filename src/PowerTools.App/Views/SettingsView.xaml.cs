@@ -2,6 +2,8 @@ using System.Diagnostics;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Navigation;
+using PowerTools.App.Feedback;
+using PowerTools.Core.Feedback;
 using PowerTools.Core.Modules;
 using PowerTools.Modules.DiskAnalyzer;
 using PowerTools.Modules.Uninstaller;
@@ -18,6 +20,15 @@ public sealed partial class SettingsView : Page
         InitializeComponent();
     }
 
+    private async void OnSendFeedbackClick(object sender, RoutedEventArgs e)
+    {
+        if (FeedbackConfig.ResolveEndpoint() is not { } endpoint) return;
+
+        var dialog = new FeedbackDialog(FeedbackClient.Create(endpoint)) { XamlRoot = XamlRoot };
+        await dialog.ShowAsync();
+        FeedbackStatusText.Text = dialog.WasSent ? "已发送，谢谢你的反馈。" : string.Empty;
+    }
+
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         var registry = (ModuleRegistry)e.Parameter;
@@ -25,6 +36,14 @@ public sealed partial class SettingsView : Page
 
         RegistryBackupPathText.Text = _uninstaller.RegistryBackupDirectory;
         VersionText.Text = $"PowerTools {AppVersionText()}";
+
+        // With a feedback server configured the app can send something, but only when the user presses "发送"; the
+        // privacy sentence must say so. Without one it stays as it was, because it is still true.
+        if (FeedbackConfig.ResolveEndpoint() is not null)
+        {
+            FeedbackSection.Visibility = Visibility.Visible;
+            PrivacyText.Text = "PowerTools 不会自动联网，也不会收集使用数据。只有在你点击“发送反馈”里的“发送”时，才会把你写的内容发送出去。";
+        }
 
         ThemeCombo.SelectedIndex = ApplicationData.Current.LocalSettings.Values["Theme"] switch
         {

@@ -108,13 +108,39 @@
                 </Grid>
             </Border>
 
+            <!-- Shown only when there is a feedback server to send to (see FeedbackConfig). -->
+            <StackPanel x:Name="FeedbackSection" Spacing="16" Visibility="Collapsed">
+                <TextBlock Text="反馈" FontWeight="SemiBold" FontSize="16" />
+                <Border Padding="16,12" CornerRadius="6" BorderThickness="1"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="发送反馈" FontWeight="SemiBold" />
+                            <TextBlock Text="告诉我们遇到的问题或想要的功能。只有你点击“发送”时才会联网。" TextWrapping="Wrap" Opacity="0.7" />
+                            <TextBlock x:Name="FeedbackStatusText" Opacity="0.7" FontSize="12" />
+                        </StackPanel>
+                        <Button Grid.Column="1" VerticalAlignment="Top" Click="OnSendFeedbackClick">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon Glyph="&#xE939;" FontSize="14" />
+                                <TextBlock Text="发送反馈…" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
             <TextBlock Text="关于" FontWeight="SemiBold" FontSize="16" />
             <Border Padding="16,12" CornerRadius="6" BorderThickness="1"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
                 <StackPanel Spacing="8">
                     <TextBlock x:Name="VersionText" FontWeight="SemiBold" />
-                    <TextBlock Text="PowerTools 不会联网，也不会收集或上传任何个人数据。" TextWrapping="Wrap" Opacity="0.7" />
+                    <TextBlock x:Name="PrivacyText" Text="PowerTools 不会联网，也不会收集或上传任何个人数据。" TextWrapping="Wrap" Opacity="0.7" />
                     <Button Click="OnShowThirdPartyNoticesClick" HorizontalAlignment="Left">
                         <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon Glyph="&#xE946;" FontSize="14" />
