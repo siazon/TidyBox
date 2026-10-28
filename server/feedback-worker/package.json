@@ -6,7 +6,9 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "list": "wrangler d1 execute feedback --remote --file=queries/recent.sql",
+    "list:local": "wrangler d1 execute feedback --local --file=queries/recent.sql"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.4.9",
