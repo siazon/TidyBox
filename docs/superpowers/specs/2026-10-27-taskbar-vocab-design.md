@@ -100,7 +100,7 @@ WinUI 3 的进程在存在其他窗口时可能不会随主窗口关闭而退出
 - Core 新增 `SingleInstanceGuard`：用每个用户会话一个的命名互斥体（`Local\PowerTools.SingleInstance`）；能拿到就是第一个实例（primary），拿不到就是后续实例（secondary）。互斥体是进程退出时由系统释放的，primary 退出时显式释放。
 - 判定放在 `App.OnLaunched` 的**最前面**：在创建 `MainWindow`、启动管道监听、自动开始单词条**之前**。secondary 绝不能启动单词条。
 - secondary 通过现有管道发送一条消息后退出：带 `--analyze <路径>` 时发送路径（与现在一致）；普通启动发送固定的激活令牌 `--activate`。
-- 因为 primary 可能刚拿到互斥体、管道监听还没建好，secondary 发送要**重试最长约 3 秒**；仍无人响应时**也退出**（拿着互斥体的进程是活的，再开第二个实例比"没反应"更糟）。这是我的决定，用户可改。
+- 因为 primary 可能刚拿到互斥体、管道监听还没建好，secondary 发送要**重试最长约 3 秒**；仍无人响应时，secondary 先释放自己持有的互斥体句柄再重新抢一次：第一个实例刚关闭时（它的互斥体比管道多活一小会儿）名字已空，这个副本就接管并照常处理 `--analyze` 请求；名字仍被占用则说明第一个实例卡住了，弹出一个提示框（"PowerTools 已在运行，但没有响应…"）后退出，**不会静默消失**。（最初的设计是"无人响应也直接退出"；终审指出这会让右键菜单"分析此文件夹"在关窗口的瞬间丢请求，并违反反目标，已修正。）
 - primary 收到消息后在 UI 线程处理：路径 → `OpenInDiskAnalyzer`（现状不变）；`--activate` → 复用现有的 `BringToFront()`（最小化时先还原再激活）。secondary 在发送前已调用 `AllowSetForegroundWindow`（现有代码），让 primary 能真正取得前台。
 - 协议兼容：路径消息不变。`--activate` 不是完整路径，不会与路径冲突，`App` 里原有的 `Path.IsPathFullyQualified` 检查仍然成立。
 - 现有类名 `AnalyzeRequestListener/Sender` 不强制改名；是否重命名由实现者决定。

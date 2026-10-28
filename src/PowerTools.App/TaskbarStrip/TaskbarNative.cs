@@ -38,6 +38,17 @@ internal static class TaskbarNative
 
     public static bool IsAlive(IntPtr hwnd) => hwnd != IntPtr.Zero && IsWindow(hwnd);
 
+    public static IntPtr Foreground() => GetForegroundWindow();
+
+    /// <summary>
+    /// Giving the strip a window and embedding it leaves the keyboard focus with the strip (it ends up as the foreground
+    /// window). Hands the focus back to what had it, which is the window the user was just working in.
+    /// </summary>
+    public static void RestoreForeground(IntPtr previous)
+    {
+        if (IsAlive(previous) && GetForegroundWindow() != previous) SetForegroundWindow(previous);
+    }
+
     /// <summary>
     /// GetParent is not used for the check: while the window still has the popup style it reports the owner, not the
     /// parent, and would wrongly say the embedding failed.
@@ -91,6 +102,8 @@ internal static class TaskbarNative
     [DllImport("user32.dll")] private static extern IntPtr SetParent(IntPtr child, IntPtr parent);
     [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
     [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int w, int h, uint flags);

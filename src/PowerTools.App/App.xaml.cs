@@ -56,19 +56,44 @@ public partial class App : Application
     [DllImport("user32.dll")]
     private static extern bool AllowSetForegroundWindow(int processId);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int MessageBoxW(IntPtr window, string text, string caption, uint type);
+
+    private const uint MbOk = 0x0, MbIconWarning = 0x30;
+
+    /// <summary>For a copy that found another one already running.</summary>
+    /// <returns>True when this copy should carry on as the running one; false when it should exit.</returns>
+    private bool HandOverOrTakeOver()
+    {
+        // This copy was started by the user, so it may let the running one come to the front. The running copy may
+        // still be starting up and not listening yet; sending waits for its pipe for a few seconds.
+        AllowSetForegroundWindow(AsfwAny);
+        var handedOver = AnalyzeRequestSender.TrySend(
+            AnalyzeRequestListener.DefaultPipeName, _pendingAnalyzePath ?? LaunchRequest.ActivateMessage, TimeSpan.FromSeconds(3));
+
+        // Let go of our own handle first: while any handle is open the name stays taken, even if its owner is gone.
+        _singleInstance!.Dispose();
+        if (handedOver) return false;
+
+        // Nobody answered. The running copy may just have closed (its name outlives its pipe for a moment), in which case
+        // the name is free now and this copy takes over, analyze request and all. If it is still taken, that copy is
+        // stuck; say so instead of vanishing without a trace.
+        _singleInstance = new SingleInstanceGuard(SingleInstanceGuard.DefaultName);
+        if (_singleInstance.IsPrimary) return true;
+
+        _singleInstance.Dispose();
+        MessageBoxW(IntPtr.Zero, "PowerTools 已在运行，但没有响应。请先在任务管理器里结束它，再重新打开。", "PowerTools", MbOk | MbIconWarning);
+        return false;
+    }
+
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         _pendingAnalyzePath = LaunchRequest.GetAnalyzePath(Environment.GetCommandLineArgs());
 
         // Decided before anything else is created, so a second copy never opens a window or starts the vocab strip.
         _singleInstance = new SingleInstanceGuard(SingleInstanceGuard.DefaultName);
-        if (!_singleInstance.IsPrimary)
+        if (!_singleInstance.IsPrimary && !HandOverOrTakeOver())
         {
-            // This copy was started by the user, so it may let the running one come to the front. The running copy may
-            // still be starting up and not listening yet; sending waits for its pipe for a few seconds.
-            AllowSetForegroundWindow(AsfwAny);
-            AnalyzeRequestSender.TrySend(AnalyzeRequestListener.DefaultPipeName, _pendingAnalyzePath ?? LaunchRequest.ActivateMessage, TimeSpan.FromSeconds(3));
-            _singleInstance.Dispose();
             Exit();
             return;
         }

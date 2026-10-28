@@ -13,12 +13,14 @@ internal sealed class TaskbarStripHost
 {
     private static readonly TimeSpan WordInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan MaintenanceInterval = TimeSpan.FromSeconds(2);
+    private const int MaxFailedReopens = 3;
 
     private readonly VocabModule _module;
     private TaskbarStripWindow? _window;
     private IntPtr _hwnd;
     private WordCard? _current;
     private bool _active;
+    private int _failedReopens;
     private bool? _lightTaskbar;
     private (int Height, (int Left, int Width)? Slot)? _lastPlacement;
     private DispatcherQueueTimer? _wordTimer;
@@ -37,6 +39,7 @@ internal sealed class TaskbarStripHost
         if (_active) return true;
 
         Error = null;
+        _failedReopens = 0;
         _current = _module.Next();
         if (_current is null)
         {
@@ -80,13 +83,17 @@ internal sealed class TaskbarStripHost
     // Creates the window and embeds it. On failure nothing is left behind.
     private bool Open()
     {
+        // Creating and embedding the window leaves the focus with it; remember who had it to hand it back.
+        var previousForeground = TaskbarNative.Foreground();
         var window = new TaskbarStripWindow();
         window.SetCard(_current!);
-        window.Activate();
+        window.AppWindow.Show(activateWindow: false);
 
         var geometry = TaskbarNative.Measure();
         var hwnd = window.Hwnd;
-        if (geometry is null || !TaskbarNative.Embed(hwnd, geometry.Value.Taskbar))
+        var embedded = geometry is not null && TaskbarNative.Embed(hwnd, geometry.Value.Taskbar);
+        TaskbarNative.RestoreForeground(previousForeground);
+        if (!embedded)
         {
             Error = "无法嵌入任务栏";
             CloseWindow(window);
@@ -97,7 +104,7 @@ internal sealed class TaskbarStripHost
         _hwnd = hwnd;
         _lightTaskbar = null;
         _lastPlacement = null;
-        Layout(geometry.Value);
+        Layout(geometry!.Value); // not null: embedding only succeeds with a measured taskbar
         return true;
     }
 
@@ -110,7 +117,10 @@ internal sealed class TaskbarStripHost
         if (_window is null || !TaskbarNative.IsAlive(_hwnd))
         {
             CloseWindow();
-            if (TaskbarNative.Measure() is not null) Open();
+            if (TaskbarNative.Measure() is null) return; // Explorer is not back yet: wait, this is not a failure
+
+            if (Open()) _failedReopens = 0;
+            else if (++_failedReopens >= MaxFailedReopens) Hide(); // stop for good instead of retrying forever; Error says why
             return;
         }
 
