@@ -51,7 +51,7 @@
 
 - Windows 11 only；PowerTools 是 MSIX 全信任，普通权限运行。
 - 新增网络访问意味着 Store 隐私声明从"不联网"变为"仅在用户主动提交反馈时联网"；Partner Center 表单要同步，可能要提供隐私政策链接。
-- Worker 是 TypeScript，放在仓库的 `server/feedback-worker/`；`@cloudflare/vitest-pool-workers` 0.23.0 要求 `vitest ^4.1`，**必须锁 vitest 到 ^4.1**（npm 上最新的 5.x 装不上）。
+- Worker 是 TypeScript，放在仓库的 `server/feedback-worker/`；测试用 `@cloudflare/vitest-plugin`（旧名 `@cloudflare/vitest-pool-workers` 已废弃；peer 为 `vitest ^4.1 || ^5`），`vitest` 取 `^4.1`。
 - 部署需要作者自己的 Cloudflare 账号登录，以及一个托管在 Cloudflare 上的域名（大陆可达性）；这些步骤只能由用户完成。
 
 ## 6. 接口契约
@@ -96,7 +96,7 @@
 
 ## 10. 测试与验证
 
-- Worker：`vitest` + `@cloudflare/vitest-pool-workers`，用真实的 D1（Miniflare）应用 migrations，覆盖校验、限额、写库。
+- Worker：`vitest` + `@cloudflare/vitest-plugin`，用真实的 D1（Miniflare）应用 migrations，覆盖校验、限额、写库。
 - Core：xUnit，`FeedbackClient` 用假的 `HttpMessageHandler`（不走真实网络）；`AppLog`、`LogRedactor` 用临时目录。
 - 手动：用 `wrangler dev` 起本地 Worker，在 PowerTools（Debug 构建可用环境变量覆盖地址）里真实提交一条建议和一条带日志的错误，再用 `npm run list` 看库里的内容；部署后再做一次端到端。
 - 普通 `dotnet build` 不会刷新已注册 dev 包的布局，需要运行 App 的验证按之前的做法同步 AppX 布局。
