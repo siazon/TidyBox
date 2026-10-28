@@ -1,3 +1,5 @@
+using System.Security.AccessControl;
+using System.Security.Principal;
 using PowerTools.Core.Launch;
 
 namespace PowerTools.Core.Tests;
@@ -20,10 +22,41 @@ public sealed class SingleInstanceGuardTests : IDisposable
         return guard;
     }
 
+    // What an elevated PowerTools leaves behind for a normal one: a name the current user is not allowed to open.
+    private Mutex HoldAnUnopenableName()
+    {
+        var security = new MutexSecurity();
+        security.AddAccessRule(new MutexAccessRule(WindowsIdentity.GetCurrent().User!, MutexRights.FullControl, AccessControlType.Deny));
+        return MutexAcl.Create(initiallyOwned: false, _name, out _, security);
+    }
+
     [Fact]
     public void The_first_guard_is_primary()
     {
         Assert.True(Guard().IsPrimary);
+    }
+
+    [Fact]
+    public void A_name_we_are_not_allowed_to_open_gives_a_guard_that_is_not_primary_instead_of_throwing()
+    {
+        using var holder = HoldAnUnopenableName();
+
+        Assert.False(Guard().IsPrimary);
+    }
+
+    [Fact]
+    public void A_guard_that_was_refused_the_name_says_so()
+    {
+        using var holder = HoldAnUnopenableName();
+
+        Assert.True(Guard().IsAccessDenied);
+    }
+
+    [Fact]
+    public void A_guard_that_could_open_the_name_is_never_access_denied()
+    {
+        Assert.False(Guard().IsAccessDenied);
+        Assert.False(Guard().IsAccessDenied); // the second one is not primary, but it was allowed in
     }
 
     [Fact]

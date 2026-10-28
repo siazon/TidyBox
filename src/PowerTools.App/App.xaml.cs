@@ -81,8 +81,13 @@ public partial class App : Application
         _singleInstance = new SingleInstanceGuard(SingleInstanceGuard.DefaultName);
         if (_singleInstance.IsPrimary) return true;
 
+        // A copy running as administrator cannot be reached from a normal one (it made the name and the pipe with
+        // administrator-only access), so the reason differs from "stuck".
+        var message = _singleInstance.IsAccessDenied
+            ? "PowerTools 已在以管理员身份运行，无法从这里打开它。请先关闭那个窗口，再重新打开。"
+            : "PowerTools 已在运行，但没有响应。请先在任务管理器里结束它，再重新打开。";
         _singleInstance.Dispose();
-        MessageBoxW(IntPtr.Zero, "PowerTools 已在运行，但没有响应。请先在任务管理器里结束它，再重新打开。", "PowerTools", MbOk | MbIconWarning);
+        MessageBoxW(IntPtr.Zero, message, "PowerTools", MbOk | MbIconWarning);
         return false;
     }
 

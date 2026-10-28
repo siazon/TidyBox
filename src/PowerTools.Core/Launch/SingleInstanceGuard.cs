@@ -11,18 +11,30 @@ namespace PowerTools.Core.Launch;
 /// </remarks>
 public sealed class SingleInstanceGuard : IDisposable
 {
-    private readonly Mutex _mutex;
+    private readonly Mutex? _mutex;
 
     /// <summary>One per Windows session, so each signed-in user has their own.</summary>
     public static string DefaultName => @"Local\PowerTools.SingleInstance";
 
     public SingleInstanceGuard(string name)
     {
-        _mutex = new Mutex(initiallyOwned: false, name, out var createdNew);
-        IsPrimary = createdNew;
+        try
+        {
+            _mutex = new Mutex(initiallyOwned: false, name, out var createdNew);
+            IsPrimary = createdNew;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // The name exists and this user may not open it: a copy running as administrator made it, and a normal copy
+            // gets no access to what an elevated one creates. So there is a running copy, just not one we can reach.
+            IsAccessDenied = true;
+        }
     }
 
     public bool IsPrimary { get; }
 
-    public void Dispose() => _mutex.Dispose();
+    /// <summary>True when another copy holds the name but this one is not allowed to open it (it runs elevated).</summary>
+    public bool IsAccessDenied { get; }
+
+    public void Dispose() => _mutex?.Dispose();
 }
