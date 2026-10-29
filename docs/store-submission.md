@@ -128,7 +128,15 @@ Restricted capabilities: runFullTrust only (packaged desktop app). The context-m
 6. 先用 Partner Center 提交一个**不公开**的版本，让认证流程给出真实反馈，再决定是否需要调整 capability。
 7. 决定 Store 版是否保留"开发者模式 + 背单词"。它默认关闭、菜单里不显示，但开启后会把窗口嵌进任务栏。若保留，认证备注里写明；若不想冒审核风险，就在发布配置里去掉。（我没有核实 Store 政策对"隐藏功能"的具体要求，请以政策原文为准。）
 8. 把隐私声明表单和 `docs/privacy-policy.md` 发布成网页，内容必须一致（反馈会联网；文件整理的数据只在本机）。
-9. 本机已装 Windows SDK 的 `makeappx.exe`、`signtool.exe` 和 WACK（`appcert.exe`），可以在本地打包并跑认证工具；还没有做过。
+9. 本地打包与 WACK（2026-10-29 做过一次，包身份仍是占位的 `TidyBox.Dev`）：
+   - 做法：`dotnet build src/TidyBox.App -c Release -p:Platform=x64 -r win-x64 --self-contained true -p:WindowsAppSDKSelfContained=true`（`dotnet build` 不会生成 `.msix`）。**不能**直接把输出文件夹整个打包：图标等文件是由构建生成的包清单（输出目录里的 `TidyBox.App.build.appxrecipe`）从别处映射进来的，漏掉就会缺 `Assets`。要按这份清单生成映射文件，再 `makeappx pack /f 映射文件 /p 包.msix`，并排除 `.pdb` 和清单文件本身。包约 88.5 MB，539 个文件；提权帮手也是自包含的，和主程序共用运行时。
+   - 签名：本地检测用一次性自签名证书（`CN=TidyBoxDev`），签完立即从证书库移除、删除私钥文件；Store 提交时由微软重新签名。
+   - WACK 必须在管理员终端里运行：`appcert.exe reset`，再 `appcert.exe test -appxpackagepath <包> -reportoutputpath <报告.xml>`。
+   - 结果：总体 **PASS**，24 项里 22 项通过，2 项失败且都是标注为"可选"的测试：
+     - "一般元数据正确性"（14 条）：全部是 Windows App SDK 自带的 `Microsoft.UI.Xaml.winmd`、`Microsoft.UI.winmd`、`Microsoft.Windows.Internal.AI.Generative.winmd` 的 GUID 重复等，与我们的代码无关。
+     - "已阻止的可执行文件"（52 条）：运行时文件，以及我们的 `TidyBox.App/Core/ElevatedHelper/ContextMenu/DiskAnalyzer/Uninstaller` 引用了 `Process.Start`、`ShellExecute`，字符串里有 `reg.exe`、`cmd.exe`。这与第 2 节和第 5 节已写明的行为一致（卸载程序、UAC 提权帮手、右键菜单经 `reg.exe` 写入）。文件整理模块没有出现在这一项里（它不启动任何进程）。
+   - 第一次打包因漏了 `Assets` 而让"应用资源"失败，修正打包方式后已通过；"品牌""应用清单"也通过。
+   - 这只是自查，不是 Store 的正式认证，以真实提交的认证结果为准。
 
 ## 来源
 
