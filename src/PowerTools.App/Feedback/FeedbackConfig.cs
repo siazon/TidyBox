@@ -3,7 +3,7 @@ namespace PowerTools.App.Feedback;
 internal static class FeedbackConfig
 {
     /// <summary>The feedback server. Empty until the Worker is deployed; while it is empty the feedback entry stays hidden.</summary>
-    public const string Endpoint = "";
+    public const string Endpoint = "https://wlfeedback.siazon.cc/v1/feedback";
 
     /// <returns>Where to send feedback, or null when there is no usable address (the entry is then not shown).</returns>
     public static Uri? ResolveEndpoint()

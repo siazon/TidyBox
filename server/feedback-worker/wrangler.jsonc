@@ -4,12 +4,12 @@
   "main": "src/index.ts",
   // Matches the workerd that ships with the installed wrangler; a newer date makes wrangler warn.
   "compatibility_date": "2026-10-23",
+  "routes": [{ "pattern": "wlfeedback.siazon.cc", "custom_domain": true }],
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "feedback",
-      // All zeros works for local runs and tests. `wrangler d1 create feedback` gives the real id (plan Task 8).
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "7a41cb3f-10a2-44fa-a044-c2e962a357fb",
       "migrations_dir": "migrations"
     }
   ]
