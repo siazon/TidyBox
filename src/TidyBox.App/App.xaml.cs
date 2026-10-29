@@ -44,7 +44,7 @@ public partial class App : Application
         // The icon sits in the install folder, which has the version in its name; the module repoints the menu after updates.
         Modules.Register(new ContextMenuModule(analyzeIcon: Path.Combine(AppContext.BaseDirectory, "Assets", "TidyBox.ico")));
         Modules.Register(new UninstallerModule());
-        Modules.Register(new DownloadsModule());
+        Modules.Register(new DownloadsModule(downloadsFolder: TidyFolderSettings.ExistingPath));
         Modules.Register(Vocab);
     }
 

@@ -32,11 +32,50 @@ public sealed partial class DownloadsView : Page
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         _module = (DownloadsModule)e.Parameter;
-        PathText.Text = _module.DownloadsFolderPath;
+        ShowFolder();
         _ = ScanAsync();
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e) => _scanCts?.Cancel();
+
+    private void ShowFolder()
+    {
+        PathText.Text = _module.DownloadsFolderPath;
+
+        var isDefault = string.Equals(
+            Path.TrimEndingDirectorySeparator(_module.DownloadsFolderPath), Path.TrimEndingDirectorySeparator(DownloadsFolder.Resolve()), StringComparison.OrdinalIgnoreCase);
+        ResetFolderButton.Visibility = isDefault ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private async void OnChangeFolderClick(object sender, RoutedEventArgs e)
+    {
+        var picker = new Windows.Storage.Pickers.FolderPicker();
+        picker.FileTypeFilter.Add("*");
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(App.CurrentWindow));
+        var folder = await picker.PickSingleFolderAsync();
+        if (folder is not null) await ChooseFolderAsync(folder.Path, remember: true);
+    }
+
+    private async void OnResetFolderClick(object sender, RoutedEventArgs e) => await ChooseFolderAsync(DownloadsFolder.Resolve(), remember: false);
+
+    // A folder TidyBox may not tidy is refused with the reason and the current folder stays.
+    private async Task ChooseFolderAsync(string path, bool remember)
+    {
+        try
+        {
+            _module.SetFolder(path);
+        }
+        catch (ArgumentException ex)
+        {
+            ResultText.Text = ex.Message;
+            return;
+        }
+
+        TidyFolderSettings.Path = remember ? _module.DownloadsFolderPath : null;
+        ResultText.Text = string.Empty;
+        ShowFolder();
+        await ScanAsync();
+    }
 
     // Looking is all a scan does: nothing is moved, written or deleted until the user confirms an action below.
     private async Task ScanAsync()
@@ -146,7 +185,7 @@ public sealed partial class DownloadsView : Page
     private void UpdateTidyButton()
     {
         var count = _proposalRows.Count(r => r.CanCheck && r.IsChecked);
-        TidyButton.Content = $"检查所选操作（{count}）";
+        TidyButton.Content = $"执行所选操作（{count}）";
         TidyButton.IsEnabled = count > 0 && BusyBar.Visibility == Visibility.Collapsed;
     }
 
@@ -165,6 +204,8 @@ public sealed partial class DownloadsView : Page
         BusyBar.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         CancelButton.Visibility = busy && cancellable ? Visibility.Visible : Visibility.Collapsed;
         RefreshButton.IsEnabled = !busy;
+        ChangeFolderButton.IsEnabled = !busy;
+        ResetFolderButton.IsEnabled = !busy;
         KeptExpander.IsEnabled = !busy; // "放回" and "撤销" live in these lists: they must not run alongside another operation
         HistoryExpander.IsEnabled = !busy;
         UpdateTidyButton();

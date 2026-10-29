@@ -19,28 +19,47 @@ public sealed class DownloadsModule : IToolModule
     private readonly ProposalBuilder _proposals;
     private readonly JournalStore _journal;
     private readonly KeptStore _kept;
-    private readonly TidyExecutor _executor;
-    private readonly TidyUndo _undo;
+    private readonly IFileRecycler _recycler;
+    private TidyExecutor _executor;
+    private TidyUndo _undo;
 
+    /// <param name="downloadsFolder">The folder to tidy. The Downloads folder when null; the user can change it later with <see cref="SetFolder"/>.</param>
     public DownloadsModule(string? downloadsFolder = null, string? storageDirectory = null, IFileRecycler? recycler = null, Func<DateTime>? clock = null)
     {
         DownloadsFolderPath = downloadsFolder ?? DownloadsFolder.Resolve();
         StorageDirectory = storageDirectory
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TidyBox", "Downloads");
         _clock = clock ?? (() => DateTime.UtcNow);
+        _recycler = recycler ?? new ShellFileRecycler();
 
         _proposals = new ProposalBuilder(_names);
         _journal = new JournalStore(Path.Combine(StorageDirectory, "journal"));
         _kept = new KeptStore(Path.Combine(StorageDirectory, "kept.json"));
-        _executor = new TidyExecutor(DownloadsFolderPath, _journal, _kept, recycler ?? new ShellFileRecycler(), _clock);
+        _executor = new TidyExecutor(DownloadsFolderPath, _journal, _kept, _recycler, _clock);
         _undo = new TidyUndo(DownloadsFolderPath, _journal, _kept);
     }
 
     public string ModuleId => "downloads";
 
-    public string DisplayName => "下载文件夹";
+    public string DisplayName => "文件整理";
 
-    public string DownloadsFolderPath { get; }
+    /// <summary>The folder being tidied: the Downloads folder unless the user chose another.</summary>
+    public string DownloadsFolderPath { get; private set; }
+
+    /// <summary>Switches to another folder. Everything the module does afterwards, and every path it accepts, is about that folder only.</summary>
+    /// <exception cref="ArgumentException">The folder is not one TidyBox may tidy (see <see cref="FolderChoice"/>); the current folder stays.</exception>
+    public void SetFolder(string path)
+    {
+        if (FolderChoice.Validate(path) is { } problem) throw new ArgumentException(problem, nameof(path));
+
+        var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        lock (_gate)
+        {
+            DownloadsFolderPath = folder;
+            _executor = new TidyExecutor(folder, _journal, _kept, _recycler, _clock);
+            _undo = new TidyUndo(folder, _journal, _kept);
+        }
+    }
 
     public string StorageDirectory { get; }
 
@@ -63,10 +82,11 @@ public sealed class DownloadsModule : IToolModule
     public Task<DownloadsReport> ScanAsync(CancellationToken ct = default) => Task.Run(() =>
     {
         var now = _clock();
-        var files = _scanner.Scan(DownloadsFolderPath, _names.AllFolderNames, now);
+        var folder = DownloadsFolderPath; // one folder for the whole scan, even if the user switches meanwhile
+        var files = _scanner.Scan(folder, _names.AllFolderNames, now);
         ct.ThrowIfCancellationRequested();
 
-        var proposals = _proposals.Build(DownloadsFolderPath, files);
+        var proposals = _proposals.Build(folder, files);
         ReviewResult review;
         lock (_gate) review = ReviewList.Build(files, _kept, now); // reads the kept list, which an operation may be changing
 
@@ -78,7 +98,7 @@ public sealed class DownloadsModule : IToolModule
         }
 
         return new DownloadsReport(
-            DownloadsFolderPath, files.Sum(f => f.SizeBytes), review.Stale.Sum(f => f.SizeBytes), proposals, review.Stale, review.Kept, domains);
+            folder, files.Sum(f => f.SizeBytes), review.Stale.Sum(f => f.SizeBytes), proposals, review.Stale, review.Kept, domains);
     }, ct);
 
     /// <exception cref="ArgumentException">A proposal points outside the downloads folder; nothing was changed.</exception>
@@ -99,8 +119,12 @@ public sealed class DownloadsModule : IToolModule
         lock (_gate) return _kept.Unkeep(fullPath);
     }
 
-    /// <summary>Newest first.</summary>
-    public IReadOnlyList<Batch> GetHistory() => _journal.LoadAll();
+    /// <summary>The batches that were about the current folder, newest first. Those of another folder come back when the user switches to it.</summary>
+    public IReadOnlyList<Batch> GetHistory()
+    {
+        var folder = DownloadsFolderPath;
+        return _journal.LoadAll().Where(batch => batch.Entries.All(entry => PathGuard.IsInside(folder, entry.From))).ToList();
+    }
 
     public UndoResult Undo(string batchId)
     {

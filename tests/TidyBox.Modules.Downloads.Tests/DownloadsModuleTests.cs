@@ -13,7 +13,7 @@ public class DownloadsModuleTests : IDisposable
     {
         var module = new DownloadsModule(downloadsFolder: _root, storageDirectory: Path.Combine(_root, "store"));
 
-        Assert.Equal(("downloads", "下载文件夹"), (module.ModuleId, module.DisplayName));
+        Assert.Equal(("downloads", "文件整理"), (module.ModuleId, module.DisplayName));
     }
 
     [Fact]

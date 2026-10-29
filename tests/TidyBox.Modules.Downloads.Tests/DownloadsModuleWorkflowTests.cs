@@ -167,6 +167,72 @@ public class DownloadsModuleWorkflowTests : IDisposable
         Assert.Equal(BatchKind.Recycle, Assert.Single(_module.GetHistory()).Kind);
     }
 
+    private string OtherFolder(params string[] files)
+    {
+        var folder = Path.Combine(_base, "Other");
+        Directory.CreateDirectory(folder);
+        foreach (var name in files)
+        {
+            var path = Path.Combine(folder, name);
+            File.WriteAllText(path, name);
+            File.SetCreationTimeUtc(path, Now - TimeSpan.FromDays(1));
+            File.SetLastWriteTimeUtc(path, Now - TimeSpan.FromDays(1));
+        }
+
+        return folder;
+    }
+
+    [Fact]
+    public async Task SetFolder_ThenScan_UsesTheNewFolder()
+    {
+        Make("here.pdf", "x", 1);
+        var other = OtherFolder("there.pdf");
+
+        _module.SetFolder(other);
+        var report = await _module.ScanAsync();
+
+        Assert.Equal(other, report.Folder);
+        Assert.Equal(other, _module.DownloadsFolderPath);
+        Assert.Equal("there.pdf", Assert.Single(report.Proposals).File.Name);
+    }
+
+    [Fact]
+    public async Task SetFolder_ProposalsOfTheOldFolder_AreRefused_AndNothingMoves()
+    {
+        var here = Make("here.pdf", "x", 1);
+        var oldReport = await _module.ScanAsync();
+        _module.SetFolder(OtherFolder());
+
+        await Assert.ThrowsAsync<ArgumentException>(() => _module.ApplyAsync(oldReport.Proposals.ToList()));
+
+        Assert.True(File.Exists(here));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(@"C:\")]
+    public void SetFolder_Unacceptable_Throws_AndKeepsTheCurrentFolder(string path)
+    {
+        Assert.Throws<ArgumentException>(() => _module.SetFolder(path));
+
+        Assert.Equal(_root, _module.DownloadsFolderPath);
+    }
+
+    [Fact]
+    public async Task GetHistory_ShowsOnlyTheBatchesOfTheCurrentFolder()
+    {
+        Make("a.pdf", "a", 3);
+        var report = await _module.ScanAsync();
+        await _module.ApplyAsync(report.Proposals.Where(p => p.DefaultChecked).ToList());
+        Assert.Single(_module.GetHistory());
+
+        _module.SetFolder(OtherFolder());
+        Assert.Empty(_module.GetHistory());
+
+        _module.SetFolder(_root);
+        Assert.Single(_module.GetHistory());
+    }
+
     private sealed class BlockingRecycler : IFileRecycler
     {
         public ManualResetEventSlim Entered { get; } = new();

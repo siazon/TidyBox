@@ -73,8 +73,12 @@
         <StackPanel Margin="24,16,24,16" Spacing="16">
 
             <StackPanel Spacing="4">
-                <TextBlock Text="下载文件夹" Style="{StaticResource TitleTextBlockStyle}" />
+                <TextBlock Text="文件整理" Style="{StaticResource TitleTextBlockStyle}" />
                 <TextBlock x:Name="PathText" Opacity="0.7" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="ChangeFolderButton" Content="更改文件夹…" Click="OnChangeFolderClick" />
+                    <Button x:Name="ResetFolderButton" Content="恢复为下载文件夹" Click="OnResetFolderClick" Visibility="Collapsed" />
+                </StackPanel>
                 <TextBlock x:Name="SummaryText" TextWrapping="Wrap" />
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button x:Name="RefreshButton" Content="重新扫描" Click="OnRefreshClick" />
@@ -90,7 +94,7 @@
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
                 <StackPanel Spacing="8">
                     <TextBlock x:Name="TidyTitle" FontWeight="SemiBold" />
-                    <TextBlock Text="按文件类型整理进下载文件夹里的分类文件夹。点“检查所选操作”并确认后才会移动，移动后可以在“历史”里撤销。没有匹配规则的文件不会动。"
+                    <TextBlock Text="按文件类型把文件整理进所选文件夹里的分类文件夹（默认是下载文件夹，可以点“更改文件夹…”换成别的）。点“执行所选操作”并确认后才会移动，移动后可以在“历史”里撤销。没有匹配规则的文件不会动。"
                                TextWrapping="Wrap" Opacity="0.7" />
                     <StackPanel x:Name="GroupsPanel" Spacing="4" />
                     <Button x:Name="TidyButton" Click="OnTidyClick" />
