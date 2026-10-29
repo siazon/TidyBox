@@ -22,14 +22,16 @@ public sealed class TidyExecutor
     private readonly KeptStore _kept;
     private readonly IFileRecycler _recycler;
     private readonly Func<DateTime> _clock;
+    private readonly TimeSpan _recentWindow;
 
-    public TidyExecutor(string downloadsRoot, JournalStore journal, KeptStore kept, IFileRecycler recycler, Func<DateTime> clock)
+    public TidyExecutor(string downloadsRoot, JournalStore journal, KeptStore kept, IFileRecycler recycler, Func<DateTime> clock, TimeSpan recentWindow)
     {
         _downloadsRoot = downloadsRoot;
         _journal = journal;
         _kept = kept;
         _recycler = recycler;
         _clock = clock;
+        _recentWindow = recentWindow;
     }
 
     /// <exception cref="ArgumentException">A path is outside the downloads folder; nothing was changed.</exception>
@@ -158,7 +160,7 @@ public sealed class TidyExecutor
         var info = new FileInfo(file.FullPath);
         if (!info.Exists) return "文件已不存在";
         if (info.Length != file.SizeBytes || info.LastWriteTimeUtc.Ticks != file.ModifiedUtc.Ticks) return "文件在扫描之后被改动过，请重新扫描";
-        if (!SafetyFilter.IsEligible(info, _clock())) return "文件正在被使用或刚刚写入，稍后再试";
+        if (!SafetyFilter.IsEligible(info, _clock(), _recentWindow)) return "文件正在被使用或刚刚写入，稍后再试";
         if (identicalCopy is not null && !ContentCompare.AreSame(file.FullPath, identicalCopy)) return "目标处内容相同的那一份已不在或已改变，没有回收";
         return null;
     }

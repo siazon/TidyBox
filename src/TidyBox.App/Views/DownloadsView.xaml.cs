@@ -71,7 +71,15 @@ public sealed partial class DownloadsView : Page
     {
         _module = (DownloadsModule)e.Parameter;
         ShowFolder();
+        ShowThresholds();
         _ = ScanAsync();
+    }
+
+    // The number of days comes from the settings page, so the page's wording follows it.
+    private void ShowThresholds()
+    {
+        StaleHint.Text = $"超过 {_module.Options.StaleDays} 天没动的文件，默认一项都不勾选。移到回收站不会立刻释放空间，清空回收站后才真正释放（可在“磁盘空间分析”页清空）。"
+            + "选“保留，不再提醒”后，文件被修改或换了位置前不会再出现。天数可以在“设置”里改。";
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e) => _scanCts?.Cancel();
@@ -143,7 +151,7 @@ public sealed partial class DownloadsView : Page
 
     private void Render(DownloadsReport report)
     {
-        SummaryText.Text = $"文件合计 {ByteSizeFormatter.Format(report.TotalBytes)}，超过 90 天没动的 {ByteSizeFormatter.Format(report.StaleBytes)}";
+        SummaryText.Text = $"文件合计 {ByteSizeFormatter.Format(report.TotalBytes)}，超过 {_module.Options.StaleDays} 天没动的 {ByteSizeFormatter.Format(report.StaleBytes)}";
 
         string? DomainOf(DownloadFile file) => report.SourceDomains.TryGetValue(file.FullPath, out var domain) ? domain : null;
 

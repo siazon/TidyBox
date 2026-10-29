@@ -24,9 +24,12 @@ public sealed class DownloadsModule : IToolModule
     private TidyUndo _undo;
 
     /// <param name="downloadsFolder">The folder to tidy. The Downloads folder when null; the user can change it later with <see cref="SetFolder"/>.</param>
-    public DownloadsModule(string? downloadsFolder = null, string? storageDirectory = null, IFileRecycler? recycler = null, Func<DateTime>? clock = null)
+    /// <param name="options">The thresholds the user set; <see cref="TidyOptions.Default"/> when null.</param>
+    public DownloadsModule(
+        string? downloadsFolder = null, string? storageDirectory = null, IFileRecycler? recycler = null, Func<DateTime>? clock = null, TidyOptions? options = null)
     {
         DownloadsFolderPath = downloadsFolder ?? DownloadsFolder.Resolve();
+        Options = options ?? TidyOptions.Default;
         StorageDirectory = storageDirectory
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TidyBox", "Downloads");
         _clock = clock ?? (() => DateTime.UtcNow);
@@ -35,7 +38,7 @@ public sealed class DownloadsModule : IToolModule
         _proposals = new ProposalBuilder(_names);
         _journal = new JournalStore(Path.Combine(StorageDirectory, "journal"));
         _kept = new KeptStore(Path.Combine(StorageDirectory, "kept.json"));
-        _executor = new TidyExecutor(DownloadsFolderPath, _journal, _kept, _recycler, _clock);
+        _executor = new TidyExecutor(DownloadsFolderPath, _journal, _kept, _recycler, _clock, Options.RecentWindow);
         _undo = new TidyUndo(DownloadsFolderPath, _journal, _kept);
     }
 
@@ -56,8 +59,21 @@ public sealed class DownloadsModule : IToolModule
         lock (_gate)
         {
             DownloadsFolderPath = folder;
-            _executor = new TidyExecutor(folder, _journal, _kept, _recycler, _clock);
+            _executor = new TidyExecutor(folder, _journal, _kept, _recycler, _clock, Options.RecentWindow);
             _undo = new TidyUndo(folder, _journal, _kept);
+        }
+    }
+
+    /// <summary>The thresholds in force: how old a file must be to show up in the review, and how recently written a file is left alone.</summary>
+    public TidyOptions Options { get; private set; }
+
+    /// <summary>Applies new thresholds. They take effect at once: the next scan, and any recycle that is requested from now on, use them.</summary>
+    public void SetOptions(TidyOptions options)
+    {
+        lock (_gate)
+        {
+            Options = options;
+            _executor = new TidyExecutor(DownloadsFolderPath, _journal, _kept, _recycler, _clock, options.RecentWindow);
         }
     }
 
@@ -82,13 +98,14 @@ public sealed class DownloadsModule : IToolModule
     public Task<DownloadsReport> ScanAsync(CancellationToken ct = default) => Task.Run(() =>
     {
         var now = _clock();
-        var folder = DownloadsFolderPath; // one folder for the whole scan, even if the user switches meanwhile
-        var files = _scanner.Scan(folder, _names.AllFolderNames, now);
+        var folder = DownloadsFolderPath; // one folder and one set of thresholds for the whole scan, even if the user changes them meanwhile
+        var options = Options;
+        var files = _scanner.Scan(folder, _names.AllFolderNames, now, options.RecentWindow);
         ct.ThrowIfCancellationRequested();
 
         var proposals = _proposals.Build(folder, files);
         ReviewResult review;
-        lock (_gate) review = ReviewList.Build(files, _kept, now); // reads the kept list, which an operation may be changing
+        lock (_gate) review = ReviewList.Build(files, _kept, now, options.StaleAfter); // reads the kept list, which an operation may be changing
 
         var domains = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in proposals.Select(p => p.File).Concat(review.Stale).Concat(review.Kept).DistinctBy(f => f.FullPath))

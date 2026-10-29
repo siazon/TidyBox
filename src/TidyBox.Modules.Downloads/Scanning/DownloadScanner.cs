@@ -6,7 +6,7 @@ public sealed class DownloadScanner
     /// The eligible files directly in the downloads folder, plus those one level inside the category folders TidyBox itself
     /// writes to. Other folders (the user's own, other tools') are not entered, and neither is a category folder that is a link.
     /// </summary>
-    public IReadOnlyList<DownloadFile> Scan(string downloadsRoot, IReadOnlyCollection<string> categoryFolderNames, DateTime nowUtc)
+    public IReadOnlyList<DownloadFile> Scan(string downloadsRoot, IReadOnlyCollection<string> categoryFolderNames, DateTime nowUtc, TimeSpan recentWindow)
     {
         var root = new DirectoryInfo(downloadsRoot);
         if (!root.Exists) return Array.Empty<DownloadFile>();
@@ -26,7 +26,7 @@ public sealed class DownloadScanner
         {
             foreach (var file in directory.EnumerateFiles())
             {
-                if (SafetyFilter.IsEligible(file, nowUtc))
+                if (SafetyFilter.IsEligible(file, nowUtc, recentWindow))
                 {
                     files.Add(new DownloadFile(file.FullName, file.Length, file.CreationTimeUtc, file.LastWriteTimeUtc, categoryFolder));
                 }

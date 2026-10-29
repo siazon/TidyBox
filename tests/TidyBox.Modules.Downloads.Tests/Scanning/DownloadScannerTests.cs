@@ -4,6 +4,8 @@ namespace TidyBox.Modules.Downloads.Tests.Scanning;
 
 public class DownloadScannerTests : IDisposable
 {
+    private static readonly TimeSpan Window = TidyOptions.Default.RecentWindow;
+
     private static readonly DateTime Now = new(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
     private static readonly string[] Folders = { "文档", "安装包" };
     private readonly string _root = Path.Combine(Path.GetTempPath(), "tb-downloads-" + Guid.NewGuid());
@@ -21,7 +23,7 @@ public class DownloadScannerTests : IDisposable
         return path;
     }
 
-    private IReadOnlyList<DownloadFile> Scan() => new DownloadScanner().Scan(_root, Folders, Now);
+    private IReadOnlyList<DownloadFile> Scan() => new DownloadScanner().Scan(_root, Folders, Now, Window);
 
     [Fact]
     public void ReturnsTopLevelFiles_WithNullCategoryFolder()
@@ -68,7 +70,7 @@ public class DownloadScannerTests : IDisposable
     [Fact]
     public void MissingRoot_ReturnsEmpty()
     {
-        Assert.Empty(new DownloadScanner().Scan(Path.Combine(_root, "nope"), Folders, Now));
+        Assert.Empty(new DownloadScanner().Scan(Path.Combine(_root, "nope"), Folders, Now, Window));
     }
 
     [Fact]
