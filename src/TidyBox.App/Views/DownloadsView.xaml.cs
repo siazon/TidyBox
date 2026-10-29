@@ -28,9 +28,21 @@ public sealed partial class DownloadsView : Page
     public DownloadsView()
     {
         InitializeComponent();
+        HideWhenEmpty(SummaryText);
+        HideWhenEmpty(StatusText);
+        HideWhenEmpty(ResultText);
         WirePageScroll(StaleList);
         WirePageScroll(KeptList);
         WirePageScroll(HistoryList);
+    }
+
+    // An empty TextBlock still takes up a line, and its spacing in the stack, so the header would show a gap whenever there is nothing to say.
+    private static void HideWhenEmpty(TextBlock block)
+    {
+        void Update() => block.Visibility = string.IsNullOrEmpty(block.Text) ? Visibility.Collapsed : Visibility.Visible;
+
+        block.RegisterPropertyChangedCallback(TextBlock.TextProperty, (_, _) => Update());
+        Update();
     }
 
     // Each list scrolls inside its own box. Its ScrollViewer takes the mouse wheel even when it has nothing left to scroll, so the page
