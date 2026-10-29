@@ -1,10 +1,10 @@
-# 任务栏背单词 + PowerTools 单例 Implementation Plan
+# 任务栏背单词 + TidyBox 单例 Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 把 PowerTools 改成单例，并新增"背单词"模块：读 qwerty-learner 格式的 json 词表，每 5 秒在 Windows 11 任务栏托盘左侧轮换显示单词 + 释义。
+**Goal:** 把 TidyBox 改成单例，并新增"背单词"模块：读 qwerty-learner 格式的 json 词表，每 5 秒在 Windows 11 任务栏托盘左侧轮换显示单词 + 释义。
 
-**Architecture:** 单例用"命名互斥体判定谁是第一个 + 复用现有命名管道传 `--activate`"实现（Core 层，可单测）。背单词分两层：`PowerTools.Modules.Vocab`（词表加载、轮换、模块状态、位置计算，纯逻辑，xUnit 覆盖）和 App 层（设置页、透明 WinUI 3 窗口经 `SetParent` 嵌入 `Shell_TrayWnd`，Windows 行为只能手动验证）。
+**Architecture:** 单例用"命名互斥体判定谁是第一个 + 复用现有命名管道传 `--activate`"实现（Core 层，可单测）。背单词分两层：`TidyBox.Modules.Vocab`（词表加载、轮换、模块状态、位置计算，纯逻辑，xUnit 覆盖）和 App 层（设置页、透明 WinUI 3 窗口经 `SetParent` 嵌入 `Shell_TrayWnd`，Windows 行为只能手动验证）。
 
 **Tech Stack:** .NET 8、WinUI 3（Windows App SDK 2.5.1）、xUnit 2.5.3、`System.Text.Json`、Win32 P/Invoke（`user32.dll`、`CoreMessaging.dll`）。
 
@@ -14,14 +14,14 @@
 
 - Windows 11 only；MSIX 全信任（`runFullTrust`）；普通用户权限，不申请管理员权限。
 - 不引入 GPL 代码。TaskbarLyrics（MIT）只借鉴做法，本实现不复制其代码。
-- 新项目 `PowerTools.Modules.Vocab` 目标框架 `net8.0-windows10.0.19041.0`，`ImplicitUsings`/`Nullable` 开启，引用 `PowerTools.Core`；测试项目用 xUnit 2.5.3，csproj 照抄 `tests/PowerTools.Modules.Uninstaller.Tests`。
+- 新项目 `TidyBox.Modules.Vocab` 目标框架 `net8.0-windows10.0.19041.0`，`ImplicitUsings`/`Nullable` 开启，引用 `TidyBox.Core`；测试项目用 xUnit 2.5.3，csproj 照抄 `tests/TidyBox.Modules.Uninstaller.Tests`。
 - 模块：`ModuleId = "vocab"`，`DisplayName = "背单词"`。设置键：`Vocab.Path`、`Vocab.Enabled`（`ApplicationData.Current.LocalSettings`，与 `Theme` 同处存取）。
-- 单例：互斥体名 `Local\PowerTools.SingleInstance`；激活令牌 `--activate`；secondary 向管道发送最长等待 3 秒；secondary 绝不启动单词条。
+- 单例：互斥体名 `Local\TidyBox.SingleInstance`；激活令牌 `--activate`；secondary 向管道发送最长等待 3 秒；secondary 绝不启动单词条。
 - 词表格式：`[{ "name", "trans": [...], "usphone" }]`（大小写不敏感）。第一行文字 `"{name}  /{usphone}/"`（两个空格；无音标时只有 name），第二行为 `trans` 用 `；` 连接；每行单行省略号截断。
 - 位置：窗口右边缘 = 托盘左边缘 − 8 DIP；宽度 = `min(560 DIP, 可用宽度)`；可用宽度 < 100 DIP 时窗口收缩为 0 宽。换词间隔固定 5 秒；维护检查（重新嵌入/重新定位）每 2 秒。文字颜色：`SystemUsesLightTheme == 1` 用黑字，否则白字。
 - 工作区里 `CLAUDE.md` 有用户有意保留的本地改动，**绝不暂存它**；每次提交只 `git add` 本计划列出的路径。提交信息前缀 `feat:`/`fix:`/`docs:`/`chore:`。
 - Core 测试命名沿用现有的"整句下划线"风格（如 `A_listener_receives_the_path_that_was_sent`）。
-- 普通 `dotnet build` 不会刷新已注册的 dev 包布局（`src\PowerTools.App\bin\x86\Debug\net8.0-windows10.0.26100.0\AppX`）。凡需要运行 App 的手动验证，都要请用户先在 Visual Studio 里 Deploy（x86 Debug）。
+- 普通 `dotnet build` 不会刷新已注册的 dev 包布局（`src\TidyBox.App\bin\x86\Debug\net8.0-windows10.0.26100.0\AppX`）。凡需要运行 App 的手动验证，都要请用户先在 Visual Studio 里 Deploy（x86 Debug）。
 
 ## Review Focus
 
@@ -38,20 +38,20 @@
 ### Task 1: 单例的 Core 部分（激活令牌 + SingleInstanceGuard）
 
 **Files:**
-- Modify: `src/PowerTools.Core/Launch/LaunchRequest.cs`
-- Create: `src/PowerTools.Core/Launch/SingleInstanceGuard.cs`
-- Test: `tests/PowerTools.Core.Tests/LaunchRequestTests.cs`（追加）、`tests/PowerTools.Core.Tests/SingleInstanceGuardTests.cs`（新建）、`tests/PowerTools.Core.Tests/AnalyzeRequestChannelTests.cs`（追加一个）
+- Modify: `src/TidyBox.Core/Launch/LaunchRequest.cs`
+- Create: `src/TidyBox.Core/Launch/SingleInstanceGuard.cs`
+- Test: `tests/TidyBox.Core.Tests/LaunchRequestTests.cs`（追加）、`tests/TidyBox.Core.Tests/SingleInstanceGuardTests.cs`（新建）、`tests/TidyBox.Core.Tests/AnalyzeRequestChannelTests.cs`（追加一个）
 
 **Interfaces:**
 - Produces: `LaunchRequest.ActivateMessage` (`const string`, 值 `"--activate"`)；`LaunchRequest.IsActivate(string? message) -> bool`（trim 后与令牌相等，忽略大小写）。
-- Produces: `SingleInstanceGuard(string name) : IDisposable`；`bool IsPrimary { get; }`；`static string DefaultName`（`@"Local\PowerTools.SingleInstance"`）。
+- Produces: `SingleInstanceGuard(string name) : IDisposable`；`bool IsPrimary { get; }`；`static string DefaultName`（`@"Local\TidyBox.SingleInstance"`）。
 
 - [ ] **Step 1: 写失败的测试**
   - `LaunchRequestTests`：`IsActivate_is_true_for_the_token_ignoring_case_and_whitespace`（`"--activate"`、`" --ACTIVATE \n"` 为 true）；`IsActivate_is_false_for_paths_and_empty_input`（`null`、`""`、`@"C:\Users\x"`、`"--analyze"` 为 false）。
-  - `SingleInstanceGuardTests`（每个测试用 `"PowerTools.Tests." + Guid.NewGuid()` 作名字，不碰真实互斥体）：`The_first_guard_is_primary`；`A_second_guard_with_the_same_name_is_not_primary`；`Once_all_guards_are_disposed_a_new_guard_is_primary_again`；`Guards_with_different_names_are_independent`。
+  - `SingleInstanceGuardTests`（每个测试用 `"TidyBox.Tests." + Guid.NewGuid()` 作名字，不碰真实互斥体）：`The_first_guard_is_primary`；`A_second_guard_with_the_same_name_is_not_primary`；`Once_all_guards_are_disposed_a_new_guard_is_primary_again`；`Guards_with_different_names_are_independent`。
   - `AnalyzeRequestChannelTests`：`An_activate_message_is_delivered_like_any_other_text`（监听器收到的字符串恰为 `"--activate"`）。
 - [ ] **Step 2: 运行并确认失败**
-  Run: `dotnet test tests/PowerTools.Core.Tests --filter "FullyQualifiedName~LaunchRequestTests|FullyQualifiedName~SingleInstanceGuardTests|FullyQualifiedName~AnalyzeRequestChannelTests"`
+  Run: `dotnet test tests/TidyBox.Core.Tests --filter "FullyQualifiedName~LaunchRequestTests|FullyQualifiedName~SingleInstanceGuardTests|FullyQualifiedName~AnalyzeRequestChannelTests"`
   Expected: 编译失败（`ActivateMessage`/`IsActivate`/`SingleInstanceGuard` 未定义）。
 - [ ] **Step 3: 实现**
   `SingleInstanceGuard` 用 `new Mutex(initiallyOwned: false, name, out createdNew)`，`IsPrimary = createdNew`；**不要** `WaitOne`/`ReleaseMutex`（互斥体有线程归属，App 的启动线程与退出线程可能不同）；`Dispose` 只关闭句柄（最后一个句柄关闭时互斥体被系统销毁）。`IsActivate` 为纯字符串比较。
@@ -59,14 +59,14 @@
   Run: 同 Step 2。 Expected: 全部通过（`已通过!`）。
 - [ ] **Step 5: 提交**
   ```bash
-  git add src/PowerTools.Core/Launch tests/PowerTools.Core.Tests
+  git add src/TidyBox.Core/Launch tests/TidyBox.Core.Tests
   git commit -m "feat: add the activate message and a named-mutex single-instance guard"
   ```
 
 ### Task 2: 单例接入 App
 
 **Files:**
-- Modify: `src/PowerTools.App/App.xaml.cs`（`OnLaunched` 与字段）、`src/PowerTools.App/MainWindow.xaml.cs`（`BringToFront` 由 `private` 改为 `public`）
+- Modify: `src/TidyBox.App/App.xaml.cs`（`OnLaunched` 与字段）、`src/TidyBox.App/MainWindow.xaml.cs`（`BringToFront` 由 `private` 改为 `public`）
 
 **Interfaces:**
 - Consumes: Task 1 的 `SingleInstanceGuard`、`LaunchRequest.IsActivate`、`LaunchRequest.ActivateMessage`；现有 `AnalyzeRequestSender.TrySend(string pipeName, string path, TimeSpan timeout) -> bool`（连接会一直等到管道出现或超时，所以 3 秒超时即覆盖"primary 还没建好监听"）。
@@ -78,40 +78,40 @@
   3. 删除被取代的旧分支（仅当带 `--analyze` 时才尝试发送、超时 250 ms 的那段）。
   4. primary 的监听回调：`LaunchRequest.IsActivate(message)` → `main.DispatcherQueue.TryEnqueue(main.BringToFront)`；否则保持现有的"完整路径 → `OpenInDiskAnalyzer`"。
 - [ ] **Step 2: 构建**
-  Run: `dotnet build src/PowerTools.App/PowerTools.App.csproj -p:Platform=x86`
+  Run: `dotnet build src/TidyBox.App/TidyBox.App.csproj -p:Platform=x86`
   Expected: 0 个警告，0 个错误。
 - [ ] **Step 3: 全量测试不回归**
-  Run: `dotnet test PowerTools.sln --no-build`（先对 sln 做一次 `dotnet build PowerTools.sln`）
+  Run: `dotnet test TidyBox.sln --no-build`（先对 sln 做一次 `dotnet build TidyBox.sln`）
   Expected: 全部通过（含现有 `AnalyzeRequestChannelTests`）。
 - [ ] **Step 4: 手动验证（请用户先 Deploy）**
-  用 App 的 execution alias `PowerTools.exe`：
-  1. 连续启动两次 → `(Get-Process PowerTools.App).Count` 为 `1`，窗口只有一个。
+  用 App 的 execution alias `TidyBox.exe`：
+  1. 连续启动两次 → `(Get-Process TidyBox.App).Count` 为 `1`，窗口只有一个。
   2. 最小化主窗口后再启动一次 → 窗口还原并到前台，进程数仍为 1。
-  3. 主窗口打开时执行 `PowerTools.exe --analyze C:\Windows` → 磁盘分析页开始分析该目录，进程数仍为 1。
-  4. 同时启动两次（`1..2 | % { Start-Process PowerTools.exe }`）→ 最终只有一个实例。
+  3. 主窗口打开时执行 `TidyBox.exe --analyze C:\Windows` → 磁盘分析页开始分析该目录，进程数仍为 1。
+  4. 同时启动两次（`1..2 | % { Start-Process TidyBox.exe }`）→ 最终只有一个实例。
 - [ ] **Step 5: 提交**
   ```bash
-  git add src/PowerTools.App/App.xaml.cs src/PowerTools.App/MainWindow.xaml.cs
-  git commit -m "feat: make PowerTools single-instance; a second launch brings the running window to the front"
+  git add src/TidyBox.App/App.xaml.cs src/TidyBox.App/MainWindow.xaml.cs
+  git commit -m "feat: make TidyBox single-instance; a second launch brings the running window to the front"
   ```
 
 ### Task 3: Vocab 项目骨架 + WordCard + WordListLoader
 
 **Files:**
-- Create: `src/PowerTools.Modules.Vocab/PowerTools.Modules.Vocab.csproj`、`WordCard.cs`、`WordListLoader.cs`
-- Create: `tests/PowerTools.Modules.Vocab.Tests/PowerTools.Modules.Vocab.Tests.csproj`、`WordCardTests.cs`、`WordListLoaderTests.cs`
-- Modify: `PowerTools.sln`
+- Create: `src/TidyBox.Modules.Vocab/TidyBox.Modules.Vocab.csproj`、`WordCard.cs`、`WordListLoader.cs`
+- Create: `tests/TidyBox.Modules.Vocab.Tests/TidyBox.Modules.Vocab.Tests.csproj`、`WordCardTests.cs`、`WordListLoaderTests.cs`
+- Modify: `TidyBox.sln`
 
 **Interfaces:**
-- Produces（namespace `PowerTools.Modules.Vocab`）：
+- Produces（namespace `TidyBox.Modules.Vocab`）：
   - `sealed record WordCard(string Name, List<string> Trans, string? Usphone)`，另有 `string Title { get; }` 与 `string Meaning { get; }`（规则见 Global Constraints）。
   - `sealed record WordListLoadResult(IReadOnlyList<WordCard> Cards, string? Error)`，`bool Succeeded => Error is null`。
   - `static class WordListLoader { static WordListLoadResult Load(string path); }`（不向调用方抛异常）。
 
 - [ ] **Step 1: 建两个项目并登记进 sln**
   csproj 按 Global Constraints 照抄；测试项目引用被测项目。
-  Run: `dotnet sln PowerTools.sln add src/PowerTools.Modules.Vocab/PowerTools.Modules.Vocab.csproj --solution-folder src` 与 `dotnet sln PowerTools.sln add tests/PowerTools.Modules.Vocab.Tests/PowerTools.Modules.Vocab.Tests.csproj --solution-folder tests`
-  Expected: 两个项目被添加；`git diff PowerTools.sln` 只有新增项目的条目（若出现 Visual Studio 版本号改动，`git checkout` 掉那几行）。
+  Run: `dotnet sln TidyBox.sln add src/TidyBox.Modules.Vocab/TidyBox.Modules.Vocab.csproj --solution-folder src` 与 `dotnet sln TidyBox.sln add tests/TidyBox.Modules.Vocab.Tests/TidyBox.Modules.Vocab.Tests.csproj --solution-folder tests`
+  Expected: 两个项目被添加；`git diff TidyBox.sln` 只有新增项目的条目（若出现 Visual Studio 版本号改动，`git checkout` 掉那几行）。
 - [ ] **Step 2: 写失败的测试**
   - `WordCardTests`：`Title_has_the_phonetic_in_slashes_after_two_spaces`（`remain` + `rɪˈmen` → `"remain  /rɪˈmen/"`）；`Title_is_just_the_word_without_a_phonetic`（`null` 与 `""`）；`Meaning_joins_the_entries_with_a_full_width_semicolon`（`["a","b"]` → `"a；b"`）。
   - `WordListLoaderTests`（临时文件，测试类 `IDisposable` 清理）：
@@ -124,23 +124,23 @@
     - `A_list_with_nothing_usable_reports_empty`（`[]` 与全被跳过都得 `Error == "词表里没有可用的单词"`）。
     - `A_utf8_file_with_a_byte_order_mark_loads`。
 - [ ] **Step 3: 运行并确认失败**
-  Run: `dotnet test tests/PowerTools.Modules.Vocab.Tests`
+  Run: `dotnet test tests/TidyBox.Modules.Vocab.Tests`
   Expected: 编译失败（类型未定义）。
 - [ ] **Step 4: 实现**
   `WordListLoader.Load`：`File.ReadAllText`（捕获 `FileNotFoundException`/`DirectoryNotFoundException` → `找不到文件：{path}`；`IOException`/`UnauthorizedAccessException` → `无法读取文件：{原因}`）；`JsonSerializer.Deserialize<List<WordCard?>>`，`PropertyNameCaseInsensitive = true`；`JsonException` → `词表格式不正确：{原因}`。记录绑定后 `Trans` 在运行时可能为 `null`，过滤条件要据此写：`Name` 非空且 `Trans` 中至少有一个非空白项。过滤后为空 → `词表里没有可用的单词`。
 - [ ] **Step 5: 运行并确认通过**
-  Run: `dotnet test tests/PowerTools.Modules.Vocab.Tests` Expected: 全部通过。
+  Run: `dotnet test tests/TidyBox.Modules.Vocab.Tests` Expected: 全部通过。
 - [ ] **Step 6: 提交**
   ```bash
-  git add src/PowerTools.Modules.Vocab tests/PowerTools.Modules.Vocab.Tests PowerTools.sln
+  git add src/TidyBox.Modules.Vocab tests/TidyBox.Modules.Vocab.Tests TidyBox.sln
   git commit -m "feat: add the Vocab module project with the qwerty word-list loader"
   ```
 
 ### Task 4: WordRotator + VocabModule
 
 **Files:**
-- Create: `src/PowerTools.Modules.Vocab/WordRotator.cs`、`VocabModule.cs`
-- Test: `tests/PowerTools.Modules.Vocab.Tests/WordRotatorTests.cs`、`VocabModuleTests.cs`
+- Create: `src/TidyBox.Modules.Vocab/WordRotator.cs`、`VocabModule.cs`
+- Test: `tests/TidyBox.Modules.Vocab.Tests/WordRotatorTests.cs`、`VocabModuleTests.cs`
 
 **Interfaces:**
 - Consumes: Task 3 的 `WordCard`、`WordListLoader.Load`。
@@ -151,20 +151,20 @@
 - [ ] **Step 1: 写失败的测试**
   - `WordRotatorTests`：`Next_returns_the_cards_in_order_and_wraps_around`（3 张卡调 7 次）；`Next_on_an_empty_list_returns_null`。
   - `VocabModuleTests`（用临时 json）：`Id_and_display_name_are_fixed`；`Load_of_a_valid_file_sets_path_count_and_clears_the_error`；`Next_after_load_starts_at_the_first_word`；`Load_of_a_missing_file_returns_false_and_leaves_no_words`（`WordCount == 0`、`LoadError` 非空、`Path` 为尝试的路径）；`Start_without_words_returns_false_and_does_not_run`；`Start_twice_is_harmless_and_does_not_restart_the_rotation`；`Stop_when_not_running_does_nothing`；`A_failed_load_while_running_stops_it`；`A_successful_load_while_running_keeps_running_and_restarts_from_the_first_word`。
-- [ ] **Step 2: 运行并确认失败** — Run: `dotnet test tests/PowerTools.Modules.Vocab.Tests` Expected: 编译失败。
+- [ ] **Step 2: 运行并确认失败** — Run: `dotnet test tests/TidyBox.Modules.Vocab.Tests` Expected: 编译失败。
 - [ ] **Step 3: 实现** — `Load` 成功时重建 `WordRotator`；失败时清空词表、`IsRunning = false`。`Next()` 在无词表时返回 `null`。
 - [ ] **Step 4: 运行并确认通过** — Expected: 全部通过。
 - [ ] **Step 5: 提交**
   ```bash
-  git add src/PowerTools.Modules.Vocab tests/PowerTools.Modules.Vocab.Tests
+  git add src/TidyBox.Modules.Vocab tests/TidyBox.Modules.Vocab.Tests
   git commit -m "feat: add the Vocab module state and word rotation"
   ```
 
 ### Task 5: StripPlacement（位置计算）
 
 **Files:**
-- Create: `src/PowerTools.Modules.Vocab/StripPlacement.cs`
-- Test: `tests/PowerTools.Modules.Vocab.Tests/StripPlacementTests.cs`
+- Create: `src/TidyBox.Modules.Vocab/StripPlacement.cs`
+- Test: `tests/TidyBox.Modules.Vocab.Tests/StripPlacementTests.cs`
 
 **Interfaces:**
 - Produces: `static class StripPlacement { static (int Left, int Width)? Calculate(double trayLeftPx, double scale); }`。`trayLeftPx` 是托盘左边缘相对任务栏客户区原点的物理像素，`scale` 是 DPI 缩放（1.75 即 175%）。规则见 Global Constraints；`Left`/`Width` 四舍五入到整数像素。
@@ -180,19 +180,19 @@
 - [ ] **Step 4: 运行并确认通过** — Expected: 全部通过。
 - [ ] **Step 5: 提交**
   ```bash
-  git add src/PowerTools.Modules.Vocab tests/PowerTools.Modules.Vocab.Tests
+  git add src/TidyBox.Modules.Vocab tests/TidyBox.Modules.Vocab.Tests
   git commit -m "feat: compute where the vocab strip sits left of the notification area"
   ```
 
 ### Task 6: 任务栏单词条窗口与宿主
 
 **Files:**
-- Create（目录 `src/PowerTools.App/TaskbarStrip/`）：`TransparentBackdrop.cs`、`TaskbarStripWindow.xaml`、`TaskbarStripWindow.xaml.cs`、`TaskbarStripHost.cs`、`TaskbarNative.cs`
-- Modify: `src/PowerTools.App/PowerTools.App.csproj`（加 `ProjectReference` 到 Vocab）、`THIRD-PARTY-NOTICES.md`
+- Create（目录 `src/TidyBox.App/TaskbarStrip/`）：`TransparentBackdrop.cs`、`TaskbarStripWindow.xaml`、`TaskbarStripWindow.xaml.cs`、`TaskbarStripHost.cs`、`TaskbarNative.cs`
+- Modify: `src/TidyBox.App/TidyBox.App.csproj`（加 `ProjectReference` 到 Vocab）、`THIRD-PARTY-NOTICES.md`
 
 **Interfaces:**
 - Consumes: `VocabModule.Next()`、`WordCard.Title/Meaning`、`StripPlacement.Calculate`。
-- Produces（namespace `PowerTools.App.TaskbarStrip`，均 `internal`）：
+- Produces（namespace `TidyBox.App.TaskbarStrip`，均 `internal`）：
   - `TaskbarStripHost(VocabModule module)`；`bool IsShowing { get; }`；`string? Error { get; }`（最近一次 `Show()` 失败的原因，成功为 `null`）；`bool Show()`；`void Hide()`。`Show`/`Hide` 只能在 UI 线程调用；`Hide` 在未显示时无操作。
 
 - [ ] **Step 1: 实现** — 方向与已验证的 spike 一致（`D:\SourceCode\SideProject\TaskbarVocabWinUISpike`，可直接参照其中的 `TransparentBackdrop.cs` 与 `MainWindow.xaml.cs`；仓库外的文件，只读参考）。必须满足：
@@ -204,19 +204,19 @@
   - 文字颜色：读 `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize` 的 `SystemUsesLightTheme`。
 - [ ] **Step 2: 第三方声明** — 在 `THIRD-PARTY-NOTICES.md` 末尾追加一节，说明任务栏嵌入做法参考 ANYNC/TaskbarLyrics（https://github.com/ANYNC/TaskbarLyrics），MIT，`Copyright (c) 2026 anync`；写明未复制其代码、仅参考做法。
 - [ ] **Step 3: 构建**
-  Run: `dotnet build src/PowerTools.App/PowerTools.App.csproj -p:Platform=x86`
+  Run: `dotnet build src/TidyBox.App/TidyBox.App.csproj -p:Platform=x86`
   Expected: 0 个警告，0 个错误。（窗口行为需要入口才能验证，放在 Task 7 的手动验证里。）
 - [ ] **Step 4: 提交**
   ```bash
-  git add src/PowerTools.App/TaskbarStrip src/PowerTools.App/PowerTools.App.csproj THIRD-PARTY-NOTICES.md
+  git add src/TidyBox.App/TaskbarStrip src/TidyBox.App/TidyBox.App.csproj THIRD-PARTY-NOTICES.md
   git commit -m "feat: add the transparent taskbar strip window and its host"
   ```
 
 ### Task 7: "背单词"页面、模块注册与设置持久化
 
 **Files:**
-- Create: `src/PowerTools.App/Views/VocabView.xaml`、`VocabView.xaml.cs`、`src/PowerTools.App/TaskbarStrip/VocabSettings.cs`
-- Modify: `src/PowerTools.App/App.xaml.cs`、`src/PowerTools.App/MainWindow.xaml.cs`
+- Create: `src/TidyBox.App/Views/VocabView.xaml`、`VocabView.xaml.cs`、`src/TidyBox.App/TaskbarStrip/VocabSettings.cs`
+- Modify: `src/TidyBox.App/App.xaml.cs`、`src/TidyBox.App/MainWindow.xaml.cs`
 
 **Interfaces:**
 - Consumes: `VocabModule`（Task 4）、`TaskbarStripHost`（Task 6）。
@@ -229,7 +229,7 @@
   - 选文件：`module.Load(path)`，成功才 `VocabSettings.Path = path`；失败则 `App.VocabStrip.Hide()`、`VocabSettings.Enabled = false`、显示错误。
   - 开关打开：`module.Start() && App.VocabStrip.Show()`，成功则 `VocabSettings.Enabled = true`；失败则把开关扳回关闭、`module.Stop()`，显示 `App.VocabStrip.Error`（或 `module.LoadError`）。关闭：`App.VocabStrip.Hide()`、`module.Stop()`、`VocabSettings.Enabled = false`。
   - 运行中换词表：成功则单词条继续（`Load` 已重置轮换）；失败则按上面"失败"处理。
-- [ ] **Step 2: 构建** — Run: `dotnet build src/PowerTools.App/PowerTools.App.csproj -p:Platform=x86` Expected: 0 个警告，0 个错误。
+- [ ] **Step 2: 构建** — Run: `dotnet build src/TidyBox.App/TidyBox.App.csproj -p:Platform=x86` Expected: 0 个警告，0 个错误。
 - [ ] **Step 3: 手动验证（请用户先 Deploy）**
   1. 左侧导航出现"背单词"；选择 `D:\Software\qwerty\qwerty-learner\public\dicts\NGSL_1.2.json` → 显示 `已加载 1755 个单词`。
   2. 打开开关 → 托盘左侧出现透明背景的单词条，第一个词是该文件的第一项（`remain  /rɪˈmen/`），背景与任务栏一致、不遮挡图标；每 5 秒换一个词（用 DPI-aware 的 `CopyFromScreen` 截两张间隔 5 秒的图对比）。
@@ -239,14 +239,14 @@
   6. 把任务栏文字主题切到浅色/深色，下个 2 秒周期文字颜色跟着变。
 - [ ] **Step 4: 提交**
   ```bash
-  git add src/PowerTools.App
+  git add src/TidyBox.App
   git commit -m "feat: add the Vocab page and register the module"
   ```
 
 ### Task 8: 启动时自动恢复 + 关闭主窗口时不残留进程
 
 **Files:**
-- Modify: `src/PowerTools.App/App.xaml.cs`、`src/PowerTools.App/MainWindow.xaml.cs`（如需要）
+- Modify: `src/TidyBox.App/App.xaml.cs`、`src/TidyBox.App/MainWindow.xaml.cs`（如需要）
 
 **Interfaces:**
 - Consumes: `VocabSettings`、`App.Vocab`、`App.VocabStrip`（Task 7）。
@@ -255,16 +255,16 @@
   - primary 启动、`main.Activate()` 之后：若 `VocabSettings.Enabled` 且 `VocabSettings.Path` 非空 → `App.Vocab.Load(path)`；成功则 `Start()` 并 `App.VocabStrip.Show()`；**失败时不清除已保存的 `Enabled`**（只是这次不显示，页面打开时会显示 `LoadError`）。secondary 永远走不到这里（Task 2 已提前 `return`）。
   - 主窗口 `Closed` 时：**先** `App.VocabStrip.Hide()`（单词条自己也是 `Window`，不先关它进程会残留），再释放 `AnalyzeRequestListener` 与 `SingleInstanceGuard`，最后 `Exit()`。
 - [ ] **Step 2: 全量构建与测试**
-  Run: `dotnet build PowerTools.sln` 然后 `dotnet test PowerTools.sln --no-build`
+  Run: `dotnet build TidyBox.sln` 然后 `dotnet test TidyBox.sln --no-build`
   Expected: 0 个警告，0 个错误；全部测试通过（原有 595 个 + 本计划新增的）。
 - [ ] **Step 3: 手动验证（请用户先 Deploy）**
-  1. 单词条显示中，点主窗口右上角 × → 3 秒内 `Get-Process PowerTools.App` 无结果，单词条消失。
+  1. 单词条显示中，点主窗口右上角 × → 3 秒内 `Get-Process TidyBox.App` 无结果，单词条消失。
   2. 重新启动 → 单词条自动出现，不需要打开设置页。
   3. 把词表文件改名后重启 → 不崩溃、不显示单词条；打开"背单词"页显示 `找不到文件：…`。
   4. 单词条显示中再启动一次 → 仍只有一个进程、一个单词条，主窗口被带到前台。
   5. （可选，会让任务栏短暂消失几秒）`Stop-Process -Name explorer` → 几秒内单词条自动恢复。
 - [ ] **Step 4: 提交**
   ```bash
-  git add src/PowerTools.App
+  git add src/TidyBox.App
   git commit -m "feat: restore the vocab strip at launch and leave no process behind when the main window closes"
   ```

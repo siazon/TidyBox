@@ -4,7 +4,7 @@
 
 **Goal:** 实现磁盘分析模块作为一个 `IToolModule`：标准递归扫描生成共享的扫描快照数据模型、手动触发的历史对比（本次vs上次扫描，找出增长最多的文件夹）、Steam游戏库解析（占用空间+多久没动过+一键跳转卸载）。非Steam大型应用的兜底识别不在本计划范围内（设计文档里标注为V1可不做）。
 
-**Architecture:** 新增 `PowerTools.Modules.DiskAnalyzer` 类库，依赖脚手架计划里的 `PowerTools.Core`（用其中的 `IToolModule`）。内部按引擎层/UI层分离：`DirectoryScanner`（扫描）、`SnapshotStore`（快照持久化+对比）、`SteamLibraryParser`（Steam库解析）都是纯逻辑、可单测的类，不依赖WinUI3；最后一个任务才接WinUI3视图，且视图层只做手动验证（XAML渲染不是TDD友好的）。三个引擎组件共用同一套 `DiskScanEntry`/`DiskScanSnapshot` 数据模型，这是贯穿整个模块的核心契约。
+**Architecture:** 新增 `TidyBox.Modules.DiskAnalyzer` 类库，依赖脚手架计划里的 `TidyBox.Core`（用其中的 `IToolModule`）。内部按引擎层/UI层分离：`DirectoryScanner`（扫描）、`SnapshotStore`（快照持久化+对比）、`SteamLibraryParser`（Steam库解析）都是纯逻辑、可单测的类，不依赖WinUI3；最后一个任务才接WinUI3视图，且视图层只做手动验证（XAML渲染不是TDD友好的）。三个引擎组件共用同一套 `DiskScanEntry`/`DiskScanSnapshot` 数据模型，这是贯穿整个模块的核心契约。
 
 **Tech Stack:** .NET 8, xUnit, System.IO（标准递归遍历，不做NTFS MFT直读——设计文档明确这是V1之后才考虑的优化）, System.Text.Json（快照持久化，用JSON文件而不是SQLite——这是本计划的决定：V1只存"每个顶层文件夹的聚合大小"而不是每个文件的记录，数据量很小，不需要数据库引擎，YAGNI）
 
@@ -33,12 +33,12 @@
 ## Task 1: 共享扫描数据模型 + 基础递归扫描器
 
 **Files:**
-- Create: `src/PowerTools.Modules.DiskAnalyzer/PowerTools.Modules.DiskAnalyzer.csproj`
-- Create: `src/PowerTools.Modules.DiskAnalyzer/Scanning/DiskScanEntry.cs`
-- Create: `src/PowerTools.Modules.DiskAnalyzer/Scanning/DiskScanSnapshot.cs`
-- Create: `src/PowerTools.Modules.DiskAnalyzer/Scanning/DirectoryScanner.cs`
-- Test: `tests/PowerTools.Modules.DiskAnalyzer.Tests/PowerTools.Modules.DiskAnalyzer.Tests.csproj`
-- Test: `tests/PowerTools.Modules.DiskAnalyzer.Tests/Scanning/DirectoryScannerTests.cs`
+- Create: `src/TidyBox.Modules.DiskAnalyzer/TidyBox.Modules.DiskAnalyzer.csproj`
+- Create: `src/TidyBox.Modules.DiskAnalyzer/Scanning/DiskScanEntry.cs`
+- Create: `src/TidyBox.Modules.DiskAnalyzer/Scanning/DiskScanSnapshot.cs`
+- Create: `src/TidyBox.Modules.DiskAnalyzer/Scanning/DirectoryScanner.cs`
+- Test: `tests/TidyBox.Modules.DiskAnalyzer.Tests/TidyBox.Modules.DiskAnalyzer.Tests.csproj`
+- Test: `tests/TidyBox.Modules.DiskAnalyzer.Tests/Scanning/DirectoryScannerTests.cs`
 
 **Interfaces:**
 - Produces:
@@ -49,14 +49,14 @@
 - [ ] **Step 1: 项目骨架**
 
 ```bash
-dotnet new classlib -n PowerTools.Modules.DiskAnalyzer -o src/PowerTools.Modules.DiskAnalyzer -f net8.0
-dotnet new xunit -n PowerTools.Modules.DiskAnalyzer.Tests -o tests/PowerTools.Modules.DiskAnalyzer.Tests -f net8.0
-dotnet sln PowerTools.sln add src/PowerTools.Modules.DiskAnalyzer/PowerTools.Modules.DiskAnalyzer.csproj tests/PowerTools.Modules.DiskAnalyzer.Tests/PowerTools.Modules.DiskAnalyzer.Tests.csproj
-dotnet add src/PowerTools.Modules.DiskAnalyzer reference src/PowerTools.Core
-dotnet add tests/PowerTools.Modules.DiskAnalyzer.Tests reference src/PowerTools.Modules.DiskAnalyzer
+dotnet new classlib -n TidyBox.Modules.DiskAnalyzer -o src/TidyBox.Modules.DiskAnalyzer -f net8.0
+dotnet new xunit -n TidyBox.Modules.DiskAnalyzer.Tests -o tests/TidyBox.Modules.DiskAnalyzer.Tests -f net8.0
+dotnet sln TidyBox.sln add src/TidyBox.Modules.DiskAnalyzer/TidyBox.Modules.DiskAnalyzer.csproj tests/TidyBox.Modules.DiskAnalyzer.Tests/TidyBox.Modules.DiskAnalyzer.Tests.csproj
+dotnet add src/TidyBox.Modules.DiskAnalyzer reference src/TidyBox.Core
+dotnet add tests/TidyBox.Modules.DiskAnalyzer.Tests reference src/TidyBox.Modules.DiskAnalyzer
 ```
 
-- [ ] **Step 2: 运行 `dotnet build PowerTools.sln`，确认骨架编译通过**
+- [ ] **Step 2: 运行 `dotnet build TidyBox.sln`，确认骨架编译通过**
 
 - [ ] **Step 3: 写失败的测试：对一个临时目录（含2个子文件夹，其中一个有受保护/不可访问的孙子文件夹）扫描，验证聚合大小正确、受保护文件夹不中断整体扫描**
 
@@ -102,7 +102,7 @@ public class DirectoryScannerTests
 
 - [ ] **Step 4: 运行测试，确认失败**
 
-Run: `dotnet test tests/PowerTools.Modules.DiskAnalyzer.Tests --filter DirectoryScannerTests`
+Run: `dotnet test tests/TidyBox.Modules.DiskAnalyzer.Tests --filter DirectoryScannerTests`
 Expected: FAIL
 
 - [ ] **Step 5: 实现 `DiskScanEntry`/`DiskScanSnapshot`/`DirectoryScanner`**
@@ -111,13 +111,13 @@ Expected: FAIL
 
 - [ ] **Step 6: 运行测试，确认通过**
 
-Run: `dotnet test tests/PowerTools.Modules.DiskAnalyzer.Tests --filter DirectoryScannerTests`
+Run: `dotnet test tests/TidyBox.Modules.DiskAnalyzer.Tests --filter DirectoryScannerTests`
 Expected: PASS
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/PowerTools.Modules.DiskAnalyzer tests/PowerTools.Modules.DiskAnalyzer.Tests PowerTools.sln
+git add src/TidyBox.Modules.DiskAnalyzer tests/TidyBox.Modules.DiskAnalyzer.Tests TidyBox.sln
 git commit -m "feat: add shared disk-scan data model and directory scanner"
 ```
 
@@ -126,10 +126,10 @@ git commit -m "feat: add shared disk-scan data model and directory scanner"
 ## Task 2: 快照持久化 + 历史对比
 
 **Files:**
-- Create: `src/PowerTools.Modules.DiskAnalyzer/History/SnapshotStore.cs`
-- Create: `src/PowerTools.Modules.DiskAnalyzer/History/SnapshotDiff.cs`
-- Test: `tests/PowerTools.Modules.DiskAnalyzer.Tests/History/SnapshotStoreTests.cs`
-- Test: `tests/PowerTools.Modules.DiskAnalyzer.Tests/History/SnapshotDiffTests.cs`
+- Create: `src/TidyBox.Modules.DiskAnalyzer/History/SnapshotStore.cs`
+- Create: `src/TidyBox.Modules.DiskAnalyzer/History/SnapshotDiff.cs`
+- Test: `tests/TidyBox.Modules.DiskAnalyzer.Tests/History/SnapshotStoreTests.cs`
+- Test: `tests/TidyBox.Modules.DiskAnalyzer.Tests/History/SnapshotDiffTests.cs`
 
 **Interfaces:**
 - Consumes: `DiskScanSnapshot`/`DiskScanEntry`（Task 1）
@@ -196,20 +196,20 @@ public class SnapshotDiffTests
 
 - [ ] **Step 2: 运行测试，确认失败**
 
-Run: `dotnet test tests/PowerTools.Modules.DiskAnalyzer.Tests --filter "SnapshotStoreTests|SnapshotDiffTests"`
+Run: `dotnet test tests/TidyBox.Modules.DiskAnalyzer.Tests --filter "SnapshotStoreTests|SnapshotDiffTests"`
 Expected: FAIL
 
 - [ ] **Step 3: 实现 `SnapshotStore`（JSON序列化读写，文件名用`rootPath`的稳定哈希，比如SHA256取前16位十六进制）和 `SnapshotDiff`**
 
 - [ ] **Step 4: 运行测试，确认通过**
 
-Run: `dotnet test tests/PowerTools.Modules.DiskAnalyzer.Tests --filter "SnapshotStoreTests|SnapshotDiffTests"`
+Run: `dotnet test tests/TidyBox.Modules.DiskAnalyzer.Tests --filter "SnapshotStoreTests|SnapshotDiffTests"`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/PowerTools.Modules.DiskAnalyzer/History tests/PowerTools.Modules.DiskAnalyzer.Tests/History
+git add src/TidyBox.Modules.DiskAnalyzer/History tests/TidyBox.Modules.DiskAnalyzer.Tests/History
 git commit -m "feat: add snapshot persistence and historical diff comparison"
 ```
 
@@ -218,9 +218,9 @@ git commit -m "feat: add snapshot persistence and historical diff comparison"
 ## Task 3: Steam库解析器
 
 **Files:**
-- Create: `src/PowerTools.Modules.DiskAnalyzer/Steam/SteamGameInfo.cs`
-- Create: `src/PowerTools.Modules.DiskAnalyzer/Steam/SteamLibraryParser.cs`
-- Test: `tests/PowerTools.Modules.DiskAnalyzer.Tests/Steam/SteamLibraryParserTests.cs`
+- Create: `src/TidyBox.Modules.DiskAnalyzer/Steam/SteamGameInfo.cs`
+- Create: `src/TidyBox.Modules.DiskAnalyzer/Steam/SteamLibraryParser.cs`
+- Test: `tests/TidyBox.Modules.DiskAnalyzer.Tests/Steam/SteamLibraryParserTests.cs`
 
 **Interfaces:**
 - Consumes: 无（独立组件，不依赖Task 1/2的类型）
@@ -311,7 +311,7 @@ public class SteamLibraryParserTests
 
 - [ ] **Step 2: 运行测试，确认失败**
 
-Run: `dotnet test tests/PowerTools.Modules.DiskAnalyzer.Tests --filter SteamLibraryParserTests`
+Run: `dotnet test tests/TidyBox.Modules.DiskAnalyzer.Tests --filter SteamLibraryParserTests`
 Expected: FAIL
 
 - [ ] **Step 3: 实现一个最小的VDF文本解析（不需要通用VDF库——VDF格式对本任务的需求很窄，只要能抓key-value对和嵌套的`{}`块即可，手写一个简单的递归下降解析器或基于正则的行解析都可以，由实现者选择，只要测试通过）**
@@ -320,13 +320,13 @@ Expected: FAIL
 
 - [ ] **Step 4: 运行测试，确认通过**
 
-Run: `dotnet test tests/PowerTools.Modules.DiskAnalyzer.Tests --filter SteamLibraryParserTests`
+Run: `dotnet test tests/TidyBox.Modules.DiskAnalyzer.Tests --filter SteamLibraryParserTests`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/PowerTools.Modules.DiskAnalyzer/Steam tests/PowerTools.Modules.DiskAnalyzer.Tests/Steam
+git add src/TidyBox.Modules.DiskAnalyzer/Steam tests/TidyBox.Modules.DiskAnalyzer.Tests/Steam
 git commit -m "feat: add Steam library VDF/ACF parser"
 ```
 
@@ -335,9 +335,9 @@ git commit -m "feat: add Steam library VDF/ACF parser"
 ## Task 4: DiskAnalyzerModule（IToolModule实现）
 
 **Files:**
-- Create: `src/PowerTools.Modules.DiskAnalyzer/DiskAnalyzerModule.cs`
-- Create: `src/PowerTools.Modules.DiskAnalyzer/Steam/SteamUninstallLauncher.cs`
-- Test: `tests/PowerTools.Modules.DiskAnalyzer.Tests/DiskAnalyzerModuleTests.cs`
+- Create: `src/TidyBox.Modules.DiskAnalyzer/DiskAnalyzerModule.cs`
+- Create: `src/TidyBox.Modules.DiskAnalyzer/Steam/SteamUninstallLauncher.cs`
+- Test: `tests/TidyBox.Modules.DiskAnalyzer.Tests/DiskAnalyzerModuleTests.cs`
 
 **Interfaces:**
 - Consumes: `IToolModule`（脚手架计划Task 1）, `DirectoryScanner`/`SnapshotStore`/`SnapshotDiff`（本计划Task 1-2）, `SteamLibraryParser`（本计划Task 3）
@@ -374,20 +374,20 @@ public class DiskAnalyzerModuleTests
 
 - [ ] **Step 2: 运行测试，确认失败**
 
-Run: `dotnet test tests/PowerTools.Modules.DiskAnalyzer.Tests --filter DiskAnalyzerModuleTests`
+Run: `dotnet test tests/TidyBox.Modules.DiskAnalyzer.Tests --filter DiskAnalyzerModuleTests`
 Expected: FAIL
 
 - [ ] **Step 3: 实现 `DiskAnalyzerModule`、`ISteamUninstallLauncher`/`SteamUninstallLauncher`**
 
 - [ ] **Step 4: 运行测试，确认通过**
 
-Run: `dotnet test tests/PowerTools.Modules.DiskAnalyzer.Tests --filter DiskAnalyzerModuleTests`
+Run: `dotnet test tests/TidyBox.Modules.DiskAnalyzer.Tests --filter DiskAnalyzerModuleTests`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/PowerTools.Modules.DiskAnalyzer tests/PowerTools.Modules.DiskAnalyzer.Tests
+git add src/TidyBox.Modules.DiskAnalyzer tests/TidyBox.Modules.DiskAnalyzer.Tests
 git commit -m "feat: add DiskAnalyzerModule IToolModule implementation with Steam uninstall launcher"
 ```
 
@@ -396,13 +396,13 @@ git commit -m "feat: add DiskAnalyzerModule IToolModule implementation with Stea
 ## Task 5: WinUI3 视图（手动验证，非TDD）
 
 **Files:**
-- Create: `src/PowerTools.Modules.DiskAnalyzer/Views/DiskAnalyzerView.xaml` / `.xaml.cs`
+- Create: `src/TidyBox.Modules.DiskAnalyzer/Views/DiskAnalyzerView.xaml` / `.xaml.cs`
 
 **Interfaces:**
-- Consumes: `DiskAnalyzerModule`（Task 4），脚手架计划Task 5的`PowerTools.App`外壳（本任务把`DiskAnalyzerModule`注册进外壳App的`ModuleRegistry`）
+- Consumes: `DiskAnalyzerModule`（Task 4），脚手架计划Task 5的`TidyBox.App`外壳（本任务把`DiskAnalyzerModule`注册进外壳App的`ModuleRegistry`）
 - Produces: 无（叶子视图）
 
-- [ ] **Step 1: 在 `PowerTools.App` 项目里引用 `PowerTools.Modules.DiskAnalyzer`，在外壳App启动时把 `new DiskAnalyzerModule()` 注册进 `ModuleRegistry`**
+- [ ] **Step 1: 在 `TidyBox.App` 项目里引用 `TidyBox.Modules.DiskAnalyzer`，在外壳App启动时把 `new DiskAnalyzerModule()` 注册进 `ModuleRegistry`**
 
 - [ ] **Step 2: 实现 `DiskAnalyzerView`：顶部"扫描"按钮触发`DirectoryScanner.ScanAsync`，结果用简单的列表（文件夹名+大小，按大小降序）展示——V1不要求做真正的Treemap可视化控件，先用列表验证数据链路通了（Treemap视觉渲染的具体控件选型留给实现者判断，不在本计划锁死）**
 
@@ -412,13 +412,13 @@ git commit -m "feat: add DiskAnalyzerModule IToolModule implementation with Stea
 
 - [ ] **Step 5: 手动验证：运行外壳App，点击"扫描"选择一个真实文件夹，确认列表显示正确；如果本机有Steam，确认游戏库分区显示真实已安装游戏**
 
-Run: 在Visual Studio里直接运行 `PowerTools.App` 项目
+Run: 在Visual Studio里直接运行 `TidyBox.App` 项目
 Expected: 窗口打开后能看到磁盘分析模块的导航项，点进去功能可用
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/PowerTools.Modules.DiskAnalyzer/Views src/PowerTools.App
+git add src/TidyBox.Modules.DiskAnalyzer/Views src/TidyBox.App
 git commit -m "feat: add disk analyzer WinUI3 view and wire it into the shell app"
 ```
 

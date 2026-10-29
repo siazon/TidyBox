@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.22000.0</TargetPlatformMinVersion>
+    <RootNamespace>TidyBox.App</RootNamespace>
+    <UseWinUI>true</UseWinUI>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Platforms>x86;x64;ARM64</Platforms>
+    <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
+    <WindowsPackageType>MSIX</WindowsPackageType>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\TidyBox.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TidyBox.Core\TidyBox.Core.csproj" />
+    <ProjectReference Include="..\TidyBox.Modules.DiskAnalyzer\TidyBox.Modules.DiskAnalyzer.csproj" />
+    <ProjectReference Include="..\TidyBox.Modules.ContextMenu\TidyBox.Modules.ContextMenu.csproj" />
+    <ProjectReference Include="..\TidyBox.Modules.Uninstaller\TidyBox.Modules.Uninstaller.csproj" />
+    <ProjectReference Include="..\TidyBox.Modules.Vocab\TidyBox.Modules.Vocab.csproj" />
+    <ProjectReference Include="..\TidyBox.ElevatedHelper\TidyBox.ElevatedHelper.csproj" ReferenceOutputAssembly="false" OutputItemType="ElevatedHelperAssembly" />
+  </ItemGroup>
+
+  <!-- ReferenceOutputAssembly=false keeps the helper's managed dll out of the package, but its apphost exe needs it next to it. -->
+  <Target Name="IncludeElevatedHelperAssemblyInPackage" BeforeTargets="AssignTargetPaths" DependsOnTargets="ResolveProjectReferences">
+    <ItemGroup>
+      <Content Include="@(ElevatedHelperAssembly)" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <!-- PNG assets are picked up by default; SVG and ICO are not. The icon is shown next to the Explorer right-click entries. -->
+    <Content Include="Assets\app-placeholder.svg" />
+    <Content Include="Assets\TidyBox.ico" />
+    <!-- The word list the Vocab page loads until the user picks another one. -->
+    <Content Include="Assets\Vocab\NGSL_1.2.json" />
+    <!-- Shown from the Settings page; lives at the repo root, not under this project, so it needs an explicit Link. -->
+    <Content Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+  </ItemGroup>
+
+</Project>

@@ -1,5 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
+  // Keeps the product's former name on purpose: renaming a deployed Worker creates a new one without its secret and custom domain.
   "name": "powertools-feedback",
   "main": "src/index.ts",
   // Matches the workerd that ships with the installed wrangler; a newer date makes wrangler warn.

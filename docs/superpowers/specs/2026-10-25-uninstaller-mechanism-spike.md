@@ -1,6 +1,6 @@
 # 卸载工具机制验证（Task 1 结论）
 
-日期：2026-10-25　环境：Windows 11 build 26300，普通用户权限，已部署的 MSIX 包（x86，松散注册，身份 `PowerTools.Dev`，能力只有 `runFullTrust` + `unvirtualizedResources`）。
+日期：2026-10-25　环境：Windows 11 build 26300，普通用户权限，已部署的 MSIX 包（x86，松散注册，身份 `TidyBox.Dev`，能力只有 `runFullTrust` + `unvirtualizedResources`）。
 验证方式：临时探针代码放在 App 里（已删除），结果由我在**包外**用 PowerShell 读取真实注册表确认。
 
 ## 结果
@@ -8,8 +8,8 @@
 | | 做了什么 | 观察到的 |
 |---|---|---|
 | **A Store 卸载** | 包内调用 `new PackageManager().RemovePackageAsync("21090PaddyXu.QuickLook_4.5.0.0_neutral__egxr34yet59cg")`（QuickLook，用户同意卸载） | **成功**：没有 UAC，没有异常，`Get-AppxPackage` 确认已卸载。manifest 里没有声明 `packageManagement`。 |
-| **B1 HKCU 删除** | 包外用 PowerShell 建 `HKCU\Software\PowerToolsSpike\Leftover`；包内 `Registry.CurrentUser.DeleteSubKeyTree` | 包内无异常、重新打开显示"已消失"，但**包外真实注册表里仍在** → **被虚拟化，没有真正删除**。再次运行时包内报"子键不存在"（墓碑留在包私有 hive）。 |
-| **B2 HKLM 删除** | 包外以管理员建 `HKLM\SOFTWARE\PowerToolsSpike\Leftover`；包内（`Registry64` 视图）直接删除；另由包拉起一个管理员 PowerShell 子进程执行 `Remove-Item` | 包内直接删除和管理员子进程**都认为键不存在**（子进程报 `PathNotFound`），真实注册表里**键仍在** → HKLM 同样被包身份遮蔽/虚拟化，提权子进程也逃不出去。 |
+| **B1 HKCU 删除** | 包外用 PowerShell 建 `HKCU\Software\TidyBoxSpike\Leftover`；包内 `Registry.CurrentUser.DeleteSubKeyTree` | 包内无异常、重新打开显示"已消失"，但**包外真实注册表里仍在** → **被虚拟化，没有真正删除**。再次运行时包内报"子键不存在"（墓碑留在包私有 hive）。 |
+| **B2 HKLM 删除** | 包外以管理员建 `HKLM\SOFTWARE\TidyBoxSpike\Leftover`；包内（`Registry64` 视图）直接删除；另由包拉起一个管理员 PowerShell 子进程执行 `Remove-Item` | 包内直接删除和管理员子进程**都认为键不存在**（子进程报 `PathNotFound`），真实注册表里**键仍在** → HKLM 同样被包身份遮蔽/虚拟化，提权子进程也逃不出去。 |
 | **C Steam 登记** | 读三个 `Uninstall` 根 | `Steam App 413150`（Stardew Valley）在 **64 位 `HKLM\...\Uninstall`**，`UninstallString` = `"C:\Program Files (x86)\Steam\steam.exe" steam://uninstall/413150`，可靠识别。`Steam`（客户端本身）在 WOW6432Node，`UninstallString` 是 `uninstall.exe`，不匹配 `steam://uninstall/<digits>`，按普通 Win32 处理。机器上另一个 `appmanifest_228980`（Steamworks 运行库）没有 Uninstall 键——它不是游戏，不影响。 |
 
 验证后已清理包外真实注册表里的测试键；QuickLook 已按用户同意被卸载（可在 Store 重装）。
@@ -29,7 +29,7 @@
 
 ## 补充验证（Task 7 之后）：文件夹删除不受虚拟化影响
 
-包外建 `%LOCALAPPDATA%\PowerToolsSpikeLocal`、`%APPDATA%\PowerToolsSpikeRoaming`、`C:\ProgramData\PowerToolsSpikeData`（各含一个子目录和文件），从已部署的包里用 `ShellRecycleBin.Delete` 移到回收站：三个都**真的从真实文件系统消失**（包外 `Test-Path` 为 False）。所以文件夹残留的回收站删除在包身份下有效，只有注册表被虚拟化。
+包外建 `%LOCALAPPDATA%\TidyBoxSpikeLocal`、`%APPDATA%\TidyBoxSpikeRoaming`、`C:\ProgramData\TidyBoxSpikeData`（各含一个子目录和文件），从已部署的包里用 `ShellRecycleBin.Delete` 移到回收站：三个都**真的从真实文件系统消失**（包外 `Test-Path` 为 False）。所以文件夹残留的回收站删除在包身份下有效，只有注册表被虚拟化。
 测试产生的三个目录现在在用户的回收站里。
 
 ## 补充验证二：包里启动的子进程可以删真实注册表（推翻"注册表只能展示"）
@@ -72,9 +72,9 @@
 
 ## 补充验证四：注册表残留删除（已实现）端到端结果
 
-在已部署的包里用真实的 `UninstallerModule.RemoveResidueAsync` 删除三项测试数据（包外创建）：`HKCU\Software\PowerToolsSpike`、`HKLM\SOFTWARE\PowerToolsSpike`、`C:\ProgramData\PowerToolsSpikeDir`。
+在已部署的包里用真实的 `UninstallerModule.RemoveResidueAsync` 删除三项测试数据（包外创建）：`HKCU\Software\TidyBoxSpike`、`HKLM\SOFTWARE\TidyBoxSpike`、`C:\ProgramData\TidyBoxSpikeDir`。
 
-- 三项都成功；`HKCU` 的 `.reg` 备份在 `文档\PowerTools\RegistryBackups`，`HKLM` 的备份和文件夹在 `C:\ProgramData\PowerTools\Quarantine\<时间戳>\`（`registry\` 子目录和原文件夹）。
+- 三项都成功；`HKCU` 的 `.reg` 备份在 `文档\TidyBox\RegistryBackups`，`HKLM` 的备份和文件夹在 `C:\ProgramData\TidyBox\Quarantine\<时间戳>\`（`registry\` 子目录和原文件夹）。
 - 用 `reg import` 导入两个备份后，两个键、子键和值都完整恢复。
 - `HKLM` 那项经提权帮手执行，整个过程只出现一次 UAC。
 - 测试数据和备份已清理。

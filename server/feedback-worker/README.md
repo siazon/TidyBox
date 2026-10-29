@@ -1,6 +1,6 @@
-# PowerTools feedback Worker
+# TidyBox feedback Worker
 
-A Cloudflare Worker with a D1 database that receives the feedback sent from PowerTools' Settings page.
+A Cloudflare Worker with a D1 database that receives the feedback sent from TidyBox' Settings page.
 `POST /v1/feedback` — the contract and limits are in `docs/superpowers/specs/2026-10-28-feedback-design.md`.
 
 Run everything here from `server/feedback-worker/`.
@@ -19,7 +19,7 @@ npx wrangler dev --local --port 8787
 npm run list:local            # what is in the local database
 ```
 
-A Debug build of PowerTools talks to it when `POWERTOOLS_FEEDBACK_ENDPOINT=http://127.0.0.1:8787/v1/feedback`
+A Debug build of TidyBox talks to it when `TIDYBOX_FEEDBACK_ENDPOINT=http://127.0.0.1:8787/v1/feedback`
 is set in the environment that starts the app.
 
 ## Deploy (needs your Cloudflare account)
@@ -37,7 +37,7 @@ is set in the environment that starts the app.
    curl.exe -i -X POST https://feedback.<your-domain>/v1/feedback -H "Content-Type: application/json" -d '{\"kind\":\"other\",\"message\":\"smoke test\",\"appVersion\":\"1.0.0.0\"}'
    npx wrangler d1 execute feedback --remote --command "DELETE FROM feedback WHERE message = 'smoke test'"
    ```
-8. Set `FeedbackConfig.Endpoint` in `src/PowerTools.App/Feedback/FeedbackConfig.cs` to
+8. Set `FeedbackConfig.Endpoint` in `src/TidyBox.App/Feedback/FeedbackConfig.cs` to
    `https://feedback.<your-domain>/v1/feedback` and rebuild. While it is empty the feedback entry is hidden.
 
 ## Read the feedback

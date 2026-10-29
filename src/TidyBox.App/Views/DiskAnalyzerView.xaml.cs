@@ -1,0 +1,553 @@
+using System.Diagnostics;
+using Microsoft.UI;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Navigation;
+using TidyBox.Modules.DiskAnalyzer;
+using TidyBox.Modules.DiskAnalyzer.Scanning;
+using TidyBox.Modules.DiskAnalyzer.Tree;
+
+namespace TidyBox.App.Views;
+
+// ToString is what screen readers announce for a list item, so keep it human-readable.
+public record GameRow(string AppId, string Name, string Detail)
+{
+    public override string ToString() => $"{Name}, {Detail}";
+}
+
+public sealed partial class DiskAnalyzerView : Page
+{
+    private static readonly SolidColorBrush GrowthBrush = new(ColorHelper.FromArgb(255, 209, 52, 56));
+    private static readonly SolidColorBrush ShrinkBrush = new(ColorHelper.FromArgb(255, 16, 124, 16));
+
+    private DiskAnalyzerModule _module = null!;
+    private DiskTreeModel? _tree;
+
+    private readonly MenuFlyout _rowMenu = new();
+    private DiskTreeRow? _menuRow;
+
+    public DiskAnalyzerView()
+    {
+        InitializeComponent();
+        UpdateHeaders();
+        BuildRowMenu();
+    }
+
+    private void BuildRowMenu()
+    {
+        void Add(string text, string glyph, Action<DiskTreeRow> action)
+        {
+            var item = new MenuFlyoutItem { Text = text, Icon = new FontIcon { Glyph = glyph } };
+            item.Click += (_, _) =>
+            {
+                if (_menuRow is { } row) action(row);
+            };
+            _rowMenu.Items.Add(item);
+        }
+
+        Add("浏览文件夹", "\uE838", row => RunTool(row, folder => Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { folder }, UseShellExecute = false })));
+        Add("命令提示符", "\uE756", row => RunTool(row, folder => Process.Start(new ProcessStartInfo("cmd.exe") { WorkingDirectory = folder, UseShellExecute = true })));
+        _rowMenu.Items.Add(new MenuFlyoutSeparator());
+        Add("复制路径", "\uE8C8", row => CopyText(row.Node.FullPath));
+        Add("将文件和大小信息复制到剪贴板", "\uF0E3", row => CopyText(DiskRowInfo.ToClipboardText(row.Node)));
+    }
+
+    // Right-click (or the menu key) on a row: select it and show the menu next to it.
+    private void OnRowContextRequested(UIElement sender, ContextRequestedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: DiskTreeRow row } host) return;
+
+        _menuRow = row;
+        TreeList.SelectedItem = row;
+        if (e.TryGetPosition(host, out var point)) _rowMenu.ShowAt(host, point);
+        else _rowMenu.ShowAt(host);
+        e.Handled = true;
+    }
+
+    // The "[N files]" row stands for the files of its folder, so its path is that folder too.
+    private void RunTool(DiskTreeRow row, Action<string> start)
+    {
+        var folder = row.Node.FullPath;
+        if (!Directory.Exists(folder))
+        {
+            StatusText.Text = $"文件夹已不存在：{folder}";
+            return;
+        }
+
+        try
+        {
+            start(folder);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            StatusText.Text = $"无法打开：{ex.Message}";
+        }
+    }
+
+    private void CopyText(string text)
+    {
+        var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+        package.SetText(text);
+        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+    }
+
+    // Used from the row template (x:Bind functions).
+    public static GridLength BarStar(double percent) => new(Math.Clamp(percent, 0, 100), GridUnitType.Star);
+
+    public static GridLength RestStar(double percent) => new(100 - Math.Clamp(percent, 0, 100), GridUnitType.Star);
+
+    public static Thickness IndentFor(int depth) => new(depth * 18, 0, 0, 0);
+
+    public static string ExpanderGlyph(bool isExpanded, bool hasChildren)
+        => !hasChildren ? "" : isExpanded ? "" : ""; // ChevronDown / ChevronRight
+
+    public static string IconGlyph(DiskNodeKind kind) => kind == DiskNodeKind.FilesGroup ? "" : ""; // Document / Folder
+
+    public static Brush ChangeBrush(string changeText)
+        => changeText.StartsWith('+') ? GrowthBrush : changeText.StartsWith('-') ? ShrinkBrush : new SolidColorBrush(Colors.Gray);
+
+    protected override void OnNavigatedTo(NavigationEventArgs e)
+    {
+        _module = (DiskAnalyzerModule)e.Parameter;
+        _ = LoadGamesAsync();
+        _ = LoadRecycleBinUsageAsync();
+
+        ScanPendingPath();
+    }
+
+    private async Task LoadRecycleBinUsageAsync()
+    {
+        try
+        {
+            var usage = await _module.GetRecycleBinUsageAsync();
+            var totalCapacity = DiskCapacityHelper.TotalFixedDriveBytes();
+            var percent = totalCapacity > 0 ? usage.TotalBytes * 100.0 / totalCapacity : 0;
+
+            RecycleBinUsageText.Text = usage.ItemCount == 0
+                ? "回收站是空的"
+                : $"回收站当前占用 {ByteSizeFormatter.Format(usage.TotalBytes)}（{usage.ItemCount} 项，占总磁盘空间 {percent:0.0}%）";
+            SetRecycleBinBar(usage.ItemCount == 0 ? null : percent);
+        }
+        catch (Exception)
+        {
+            RecycleBinUsageText.Text = ""; // not critical; the button still works without this hint
+            SetRecycleBinBar(null);
+        }
+    }
+
+    // Nothing to show a proportion of when the bin is empty; the bar only appears once there is something in it.
+    // A real percentage is almost always tiny next to total disk capacity; a floor keeps the bar visible as more
+    // than a sliver whenever there is anything at all, while RecycleBinUsageText still shows the exact number.
+    private void SetRecycleBinBar(double? percent)
+    {
+        if (percent is not { } value)
+        {
+            RecycleBinUsageBarContainer.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var display = value > 0 ? Math.Clamp(Math.Max(value, 2.0), 0, 100) : 0;
+        RecycleBinUsageBarFillColumn.Width = new GridLength(display, GridUnitType.Star);
+        RecycleBinUsageBarRestColumn.Width = new GridLength(100 - display, GridUnitType.Star);
+        RecycleBinUsageBarContainer.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Started from the right-click menu: scans the folder it asked for, if any.</summary>
+    public void ScanPendingPath()
+    {
+        if (App.TakePendingAnalyzePath() is not { } path) return;
+
+        PathBox.Text = path;
+        _ = ScanAsync(path);
+    }
+
+    private void OnRefreshSteamClick(object sender, RoutedEventArgs e) => _ = LoadGamesAsync();
+
+    private async Task LoadGamesAsync()
+    {
+        try
+        {
+            var games = await Task.Run(_module.GetSteamGames);
+            SteamTab.Header = _module.IsSteamAvailable ? $"Steam 游戏（{games.Count}）" : "Steam 游戏（未检测到 Steam）";
+            GamesList.ItemsSource = games
+                .Select(g => new GameRow(g.AppId, g.Name, $"{ByteSizeFormatter.Format(g.SizeBytes)} · 最后更新 {g.LastUpdatedUtc.ToLocalTime():yyyy-MM-dd}"))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            SteamTab.Header = "Steam 游戏（读取失败）";
+            StatusText.Text = $"读取 Steam 游戏库失败：{ex.Message}";
+        }
+
+        await LoadOrphanFoldersAsync();
+        await LoadWorkshopResiduesAsync();
+    }
+
+    private async Task LoadOrphanFoldersAsync()
+    {
+        try
+        {
+            var orphans = await Task.Run(_module.GetOrphanFolders);
+            if (orphans.Count == 0)
+            {
+                OrphanPanel.Visibility = Visibility.Collapsed;
+                OrphanCleanText.Visibility = Visibility.Visible;
+                return;
+            }
+
+            OrphanCleanText.Visibility = Visibility.Collapsed;
+            OrphanTitle.Text = $"发现 {orphans.Count} 个疑似孤儿目录";
+            OrphanList.ItemsSource = orphans.Select(o => new OrphanFolderRow(o)).ToList();
+            OrphanResult.Visibility = Visibility.Collapsed;
+            OrphanPanel.Visibility = Visibility.Visible;
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"扫描孤儿目录失败：{ex.Message}";
+        }
+    }
+
+    private async void OnRemoveOrphanClick(object sender, RoutedEventArgs e)
+    {
+        var rows = ((IEnumerable<OrphanFolderRow>)OrphanList.ItemsSource).ToList();
+        var chosen = rows.Where(r => r.IsChecked).ToList();
+        if (chosen.Count == 0)
+        {
+            StatusText.Text = "没有勾选任何要清理的目录。";
+            return;
+        }
+
+        RemoveOrphanButton.IsEnabled = false;
+        var removed = new List<OrphanFolderRow>();
+        var failures = new List<(OrphanFolderRow Row, string Error)>();
+        try
+        {
+            foreach (var row in chosen)
+            {
+                try
+                {
+                    await _module.RemoveOrphanFolderAsync(row.Folder);
+                    removed.Add(row);
+                }
+                catch (Exception ex)
+                {
+                    failures.Add((row, ex.Message));
+                }
+            }
+
+            var remaining = rows.Except(removed).ToList();
+            OrphanList.ItemsSource = remaining;
+            if (remaining.Count == 0)
+            {
+                OrphanPanel.Visibility = Visibility.Collapsed;
+                OrphanCleanText.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                OrphanTitle.Text = $"发现 {remaining.Count} 个疑似孤儿目录";
+            }
+
+            var parts = new List<string>();
+            if (removed.Count > 0) parts.Add($"已移除 {removed.Count} 项，可在回收站中找回");
+            if (failures.Count > 0) parts.Add($"{failures.Count} 项失败：{failures[0].Row.Name} —— {failures[0].Error}");
+
+            StatusText.Text = OrphanResult.Text = string.Join("；", parts) + "。";
+            OrphanResult.Visibility = Visibility.Visible;
+        }
+        finally
+        {
+            RemoveOrphanButton.IsEnabled = true;
+        }
+    }
+
+    private async void OnRelinkOrphanClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not OrphanFolderRow row) return;
+
+        var appIdBox = new TextBox { Text = _module.GuessAppId(row.Folder) ?? "", PlaceholderText = "Steam appid，例如 413150", Header = "appid" };
+        var dialog = new ContentDialog
+        {
+            Title = $"重新关联“{row.Name}”",
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "会在这个游戏库的 steamapps 下补写一个登记文件（appmanifest），不会修改或删除游戏文件。完成后重启 Steam，它会自行检查文件、只补下载缺失的部分。",
+                        TextWrapping = TextWrapping.Wrap,
+                    },
+                    new TextBlock
+                    {
+                        Text = appIdBox.Text.Length > 0
+                            ? "已根据本机信息填入 appid，请确认它就是这个游戏。"
+                            : "没能自动识别 appid。点下面的链接搜索，把结果页上的 App ID 填到输入框，并确认它就是这个游戏（填错会让 Steam 下载别的游戏）。",
+                        TextWrapping = TextWrapping.Wrap,
+                        Opacity = 0.7,
+                    },
+                    new HyperlinkButton
+                    {
+                        Content = $"在 SteamDB 搜索“{row.Folder.FolderName}”",
+                        NavigateUri = new Uri("https://steamdb.info/search/?a=app&q=" + Uri.EscapeDataString(row.Folder.FolderName)),
+                        Padding = new Thickness(0),
+                    },
+                    appIdBox,
+                },
+            },
+            PrimaryButtonText = "重新关联",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = XamlRoot,
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var appId = appIdBox.Text; // TextBox is UI-thread-only; read it before hopping to Task.Run
+        try
+        {
+            await Task.Run(() => _module.RelinkOrphanFolder(row.Folder, appId));
+            await LoadGamesAsync();
+            StatusText.Text = $"已为“{row.Name}”补写登记文件。请重启 Steam 让它重新识别；如果游戏仍提示更新，属于正常的文件校验。";
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            StatusText.Text = $"重新关联失败：{ex.Message}";
+        }
+    }
+
+    private async Task LoadWorkshopResiduesAsync()
+    {
+        try
+        {
+            var residues = await Task.Run(_module.GetWorkshopResidues);
+            if (residues.Count == 0)
+            {
+                WorkshopPanel.Visibility = Visibility.Collapsed;
+                WorkshopCleanText.Visibility = Visibility.Visible;
+                return;
+            }
+
+            WorkshopCleanText.Visibility = Visibility.Collapsed;
+            WorkshopTitle.Text = $"发现 {residues.Count} 项未安装游戏的创意工坊残留";
+            WorkshopList.ItemsSource = residues.Select(r => new WorkshopResidueRow(r)).ToList();
+            WorkshopResult.Visibility = Visibility.Collapsed;
+            WorkshopPanel.Visibility = Visibility.Visible;
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"扫描创意工坊残留失败：{ex.Message}";
+        }
+    }
+
+    private async void OnRemoveWorkshopClick(object sender, RoutedEventArgs e)
+    {
+        var rows = ((IEnumerable<WorkshopResidueRow>)WorkshopList.ItemsSource).ToList();
+        var chosen = rows.Where(r => r.IsChecked).ToList();
+        if (chosen.Count == 0)
+        {
+            StatusText.Text = "没有勾选任何要清理的创意工坊内容。";
+            return;
+        }
+
+        RemoveWorkshopButton.IsEnabled = false;
+        var removed = new List<WorkshopResidueRow>();
+        var failures = new List<(WorkshopResidueRow Row, string Error)>();
+        try
+        {
+            foreach (var row in chosen)
+            {
+                try
+                {
+                    await _module.RemoveWorkshopResidueAsync(row.Item);
+                    removed.Add(row);
+                }
+                catch (Exception ex)
+                {
+                    failures.Add((row, ex.Message));
+                }
+            }
+
+            var remaining = rows.Except(removed).ToList();
+            WorkshopList.ItemsSource = remaining;
+            if (remaining.Count == 0)
+            {
+                WorkshopPanel.Visibility = Visibility.Collapsed;
+                WorkshopCleanText.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                WorkshopTitle.Text = $"发现 {remaining.Count} 项未安装游戏的创意工坊残留";
+            }
+
+            var parts = new List<string>();
+            if (removed.Count > 0) parts.Add($"已移除 {removed.Count} 项，可在回收站中找回");
+            if (failures.Count > 0) parts.Add($"{failures.Count} 项失败：{failures[0].Row.Name} —— {failures[0].Error}");
+
+            StatusText.Text = WorkshopResult.Text = string.Join("；", parts) + "。";
+            WorkshopResult.Visibility = Visibility.Visible;
+        }
+        finally
+        {
+            RemoveWorkshopButton.IsEnabled = true;
+        }
+    }
+
+    private async void OnEmptyRecycleBinClick(object sender, RoutedEventArgs e)
+    {
+        var confirm = new ContentDialog
+        {
+            Title = "清空回收站？",
+            Content = "这会清空整台机器的回收站，不止这次删除的内容，且无法撤销。",
+            PrimaryButtonText = "清空",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot,
+        };
+        if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
+
+        try
+        {
+            await _module.EmptyRecycleBinAsync();
+            StatusText.Text = "回收站已清空。";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"清空回收站失败：{ex.Message}";
+        }
+
+        await LoadRecycleBinUsageAsync();
+    }
+
+    private async void OnBrowseClick(object sender, RoutedEventArgs e)
+    {
+        var picker = new Windows.Storage.Pickers.FolderPicker();
+        picker.FileTypeFilter.Add("*");
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(App.CurrentWindow));
+        var folder = await picker.PickSingleFolderAsync();
+        if (folder is null) return;
+
+        PathBox.Text = folder.Path;
+        await ScanAsync(folder.Path);
+    }
+
+    private async void OnScanClick(object sender, RoutedEventArgs e) => await ScanAsync(PathBox.Text.Trim());
+
+    private async void OnPathKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key != Windows.System.VirtualKey.Enter) return;
+        e.Handled = true;
+        await ScanAsync(PathBox.Text.Trim());
+    }
+
+    // A request from the right-click menu can arrive while a scan is running; the newest request is the one that is shown.
+    private int _scanVersion;
+
+    private async Task ScanAsync(string path)
+    {
+        if (path.Length == 0 || !Directory.Exists(path))
+        {
+            StatusText.Text = $"找不到文件夹：{path}";
+            return;
+        }
+
+        var version = ++_scanVersion;
+
+        // The result is in the folder tab; do not leave the user looking at the Steam tab while it is scanning.
+        MainPivot.SelectedIndex = 0;
+        SetBusy(true);
+        StatusText.Text = $"正在扫描 {path} …";
+        try
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var result = await _module.ScanAsync(path);
+            stopwatch.Stop();
+            if (version != _scanVersion) return;
+
+            _tree = result.CreateTreeModel();
+            TreeList.ItemsSource = _tree.Rows;
+            UpdateHeaders();
+            StatusText.Text = Summarize(result, stopwatch.Elapsed);
+        }
+        catch (Exception ex)
+        {
+            if (version == _scanVersion) StatusText.Text = $"扫描失败：{ex.Message}";
+        }
+        finally
+        {
+            if (version == _scanVersion) SetBusy(false);
+        }
+    }
+
+    private static string Summarize(DiskScanResult result, TimeSpan elapsed)
+    {
+        var root = result.Root;
+        var text = $"{root.FullPath} · {ByteSizeFormatter.Format(root.SizeBytes)} · {root.FileCount:N0} 个文件 · {root.FolderCount:N0} 个文件夹 · 耗时 {elapsed.TotalSeconds:0.0} 秒";
+
+        if (result.Previous is null) return text + " · 第一次扫描，下次扫描后可看到“较上次”的变化";
+
+        var totalChange = result.Current.Entries.Sum(x => x.SizeBytes) - result.Previous.Entries.Sum(x => x.SizeBytes);
+        return text + $" · 上次扫描 {result.Previous.ScannedAtUtc.ToLocalTime():yyyy-MM-dd HH:mm}，总量较上次 {ByteSizeFormatter.FormatSigned(totalChange)}";
+    }
+
+    private void OnHeaderClick(object sender, RoutedEventArgs e)
+    {
+        if (_tree is null || sender is not Button { Tag: string column }) return;
+
+        _tree.SortBy(Enum.Parse<DiskTreeColumn>(column));
+        UpdateHeaders();
+    }
+
+    private void OnExpanderClick(object sender, RoutedEventArgs e)
+    {
+        if (_tree is not null && (sender as FrameworkElement)?.DataContext is DiskTreeRow row) _tree.Toggle(row);
+    }
+
+    private void OnRowDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        if (_tree is not null && TreeList.SelectedItem is DiskTreeRow row) _tree.Toggle(row);
+    }
+
+    private void UpdateHeaders()
+    {
+        void Set(Button button, string title, DiskTreeColumn column)
+        {
+            var arrow = _tree is not null && _tree.SortColumn == column ? (_tree.SortDescending ? " ▼" : " ▲") : "";
+            button.Content = title + arrow;
+        }
+
+        Set(NameHeader, "名称", DiskTreeColumn.Name);
+        Set(SizeHeader, "大小", DiskTreeColumn.Size);
+        Set(FilesHeader, "文件", DiskTreeColumn.Files);
+        Set(FoldersHeader, "文件夹", DiskTreeColumn.Folders);
+        Set(PercentHeader, "占上一层 %", DiskTreeColumn.Percent);
+        Set(ModifiedHeader, "上次修改", DiskTreeColumn.Modified);
+    }
+
+    private async void OnUninstallClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string appId }) return;
+
+        StatusText.Text = "已交给 Steam 处理，请在 Steam 的窗口中确认；完成后列表会自动刷新。";
+        try
+        {
+            var gone = await _module.UninstallSteamGameAsync(appId);
+            await LoadGamesAsync(); // refreshes the games list and the orphan/workshop panels together
+            StatusText.Text = gone
+                ? "卸载完成，列表已刷新。"
+                : "Steam 还没有报告卸载完成（或者你取消了），列表保持原样，可以手动刷新。";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"无法启动 Steam 卸载：{ex.Message}";
+        }
+    }
+
+    private void SetBusy(bool busy)
+    {
+        BusyRing.IsActive = busy;
+        ScanButton.IsEnabled = !busy;
+        BrowseButton.IsEnabled = !busy;
+    }
+}

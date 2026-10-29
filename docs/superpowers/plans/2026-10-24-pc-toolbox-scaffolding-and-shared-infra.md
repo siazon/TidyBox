@@ -4,7 +4,7 @@
 
 **Goal:** 搭建PC维护工具箱的项目骨架：解决方案结构、共享模块契约（IToolModule）、提权帮手进程与IPC、WinUI3外壳App、MSIX打包——为后续磁盘分析/右键菜单管理/卸载工具三个模块的独立计划提供稳定的接口基础。
 
-**Architecture:** .NET 8 多项目解决方案。`PowerTools.Core`是无UI依赖的类库，承载模块契约和提权客户端逻辑；`PowerTools.ElevatedHelper`是独立的、按需以管理员身份启动的控制台程序，通过命名管道接收操作请求；`PowerTools.App`是WinUI3外壳，负责导航和加载各模块UI；`PowerTools.Packaging`是MSIX打包项目。各模块（磁盘分析等）将在后续计划中作为实现`IToolModule`的独立组件接入，本计划只搭骨架、不实现具体业务模块。
+**Architecture:** .NET 8 多项目解决方案。`TidyBox.Core`是无UI依赖的类库，承载模块契约和提权客户端逻辑；`TidyBox.ElevatedHelper`是独立的、按需以管理员身份启动的控制台程序，通过命名管道接收操作请求；`TidyBox.App`是WinUI3外壳，负责导航和加载各模块UI；`TidyBox.Packaging`是MSIX打包项目。各模块（磁盘分析等）将在后续计划中作为实现`IToolModule`的独立组件接入，本计划只搭骨架、不实现具体业务模块。
 
 **Tech Stack:** .NET 8, WinUI3 (Windows App SDK), xUnit, System.IO.Pipes (命名管道), System.Text.Json
 
@@ -31,12 +31,12 @@
 ## Task 1: 项目脚手架 + 共享模块契约
 
 **Files:**
-- Create: `PowerTools.sln`
-- Create: `src/PowerTools.Core/PowerTools.Core.csproj`
-- Create: `src/PowerTools.Core/Modules/IToolModule.cs`
-- Create: `src/PowerTools.Core/Modules/ModuleRegistry.cs`
-- Test: `tests/PowerTools.Core.Tests/PowerTools.Core.Tests.csproj`
-- Test: `tests/PowerTools.Core.Tests/Modules/ModuleRegistryTests.cs`
+- Create: `TidyBox.sln`
+- Create: `src/TidyBox.Core/TidyBox.Core.csproj`
+- Create: `src/TidyBox.Core/Modules/IToolModule.cs`
+- Create: `src/TidyBox.Core/Modules/ModuleRegistry.cs`
+- Test: `tests/TidyBox.Core.Tests/TidyBox.Core.Tests.csproj`
+- Test: `tests/TidyBox.Core.Tests/Modules/ModuleRegistryTests.cs`
 
 **Interfaces:**
 - Produces:
@@ -47,16 +47,16 @@
 - [ ] **Step 1: 创建解决方案和空的Core/Tests项目骨架**
 
 ```bash
-dotnet new sln -n PowerTools
-dotnet new classlib -n PowerTools.Core -o src/PowerTools.Core -f net8.0
-dotnet new xunit -n PowerTools.Core.Tests -o tests/PowerTools.Core.Tests -f net8.0
-dotnet sln add src/PowerTools.Core/PowerTools.Core.csproj tests/PowerTools.Core.Tests/PowerTools.Core.Tests.csproj
-dotnet add tests/PowerTools.Core.Tests reference src/PowerTools.Core
+dotnet new sln -n TidyBox
+dotnet new classlib -n TidyBox.Core -o src/TidyBox.Core -f net8.0
+dotnet new xunit -n TidyBox.Core.Tests -o tests/TidyBox.Core.Tests -f net8.0
+dotnet sln add src/TidyBox.Core/TidyBox.Core.csproj tests/TidyBox.Core.Tests/TidyBox.Core.Tests.csproj
+dotnet add tests/TidyBox.Core.Tests reference src/TidyBox.Core
 ```
 
 - [ ] **Step 2: 运行 `dotnet build`，确认空骨架能编译通过**
 
-Run: `dotnet build PowerTools.sln`
+Run: `dotnet build TidyBox.sln`
 Expected: Build succeeded, 0 errors
 
 - [ ] **Step 3: 写失败的测试：注册两个模块后 `GetAll()` 返回两个，`GetById()` 能按id取到**
@@ -105,22 +105,22 @@ public class ModuleRegistryTests
 
 - [ ] **Step 4: 运行测试，确认失败（因为`IToolModule`/`ModuleRegistry`还不存在）**
 
-Run: `dotnet test tests/PowerTools.Core.Tests`
+Run: `dotnet test tests/TidyBox.Core.Tests`
 Expected: FAIL — 编译错误，找不到 `IToolModule`/`ModuleRegistry`
 
-- [ ] **Step 5: 在 `src/PowerTools.Core/Modules/IToolModule.cs` 和 `ModuleRegistry.cs` 实现接口**
+- [ ] **Step 5: 在 `src/TidyBox.Core/Modules/IToolModule.cs` 和 `ModuleRegistry.cs` 实现接口**
 
 `ModuleRegistry`内部用`Dictionary<string, IToolModule>`按`ModuleId`存储；`Register`遇到重复id时直接覆盖（不在本任务里处理冲突策略，YAGNI，后续模块计划如有需要再加校验）。
 
 - [ ] **Step 6: 运行测试，确认通过**
 
-Run: `dotnet test tests/PowerTools.Core.Tests`
+Run: `dotnet test tests/TidyBox.Core.Tests`
 Expected: PASS，3个测试全部通过
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add PowerTools.sln src/PowerTools.Core tests/PowerTools.Core.Tests
+git add TidyBox.sln src/TidyBox.Core tests/TidyBox.Core.Tests
 git commit -m "feat: add solution scaffold, IToolModule contract and ModuleRegistry"
 ```
 
@@ -129,9 +129,9 @@ git commit -m "feat: add solution scaffold, IToolModule contract and ModuleRegis
 ## Task 2: 提权IPC消息契约
 
 **Files:**
-- Create: `src/PowerTools.Core/Elevation/ElevationRequest.cs`
-- Create: `src/PowerTools.Core/Elevation/ElevationResponse.cs`
-- Test: `tests/PowerTools.Core.Tests/Elevation/ElevationMessageTests.cs`
+- Create: `src/TidyBox.Core/Elevation/ElevationRequest.cs`
+- Create: `src/TidyBox.Core/Elevation/ElevationResponse.cs`
+- Test: `tests/TidyBox.Core.Tests/Elevation/ElevationMessageTests.cs`
 
 **Interfaces:**
 - Consumes: 无（独立的数据契约，不依赖Task 1的类型）
@@ -172,20 +172,20 @@ public class ElevationMessageTests
 
 - [ ] **Step 2: 运行测试，确认失败（类型不存在）**
 
-Run: `dotnet test tests/PowerTools.Core.Tests --filter ElevationMessageTests`
+Run: `dotnet test tests/TidyBox.Core.Tests --filter ElevationMessageTests`
 Expected: FAIL — 编译错误
 
 - [ ] **Step 3: 实现 `ElevationRequest`/`ElevationResponse` 两个record类型**
 
 - [ ] **Step 4: 运行测试，确认通过**
 
-Run: `dotnet test tests/PowerTools.Core.Tests --filter ElevationMessageTests`
+Run: `dotnet test tests/TidyBox.Core.Tests --filter ElevationMessageTests`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/PowerTools.Core/Elevation tests/PowerTools.Core.Tests/Elevation
+git add src/TidyBox.Core/Elevation tests/TidyBox.Core.Tests/Elevation
 git commit -m "feat: add elevation IPC message contracts"
 ```
 
@@ -194,12 +194,12 @@ git commit -m "feat: add elevation IPC message contracts"
 ## Task 3: 提权服务端（帮手进程）
 
 **Files:**
-- Create: `src/PowerTools.ElevatedHelper/PowerTools.ElevatedHelper.csproj`
-- Create: `src/PowerTools.ElevatedHelper/ElevationServer.cs`
-- Create: `src/PowerTools.ElevatedHelper/IElevatedOperationHandler.cs`
-- Create: `src/PowerTools.ElevatedHelper/Program.cs`
-- Test: `tests/PowerTools.ElevatedHelper.Tests/PowerTools.ElevatedHelper.Tests.csproj`
-- Test: `tests/PowerTools.ElevatedHelper.Tests/ElevationServerTests.cs`
+- Create: `src/TidyBox.ElevatedHelper/TidyBox.ElevatedHelper.csproj`
+- Create: `src/TidyBox.ElevatedHelper/ElevationServer.cs`
+- Create: `src/TidyBox.ElevatedHelper/IElevatedOperationHandler.cs`
+- Create: `src/TidyBox.ElevatedHelper/Program.cs`
+- Test: `tests/TidyBox.ElevatedHelper.Tests/TidyBox.ElevatedHelper.Tests.csproj`
+- Test: `tests/TidyBox.ElevatedHelper.Tests/ElevationServerTests.cs`
 
 **Interfaces:**
 - Consumes: `ElevationRequest`/`ElevationResponse`（Task 2）
@@ -208,20 +208,20 @@ git commit -m "feat: add elevation IPC message contracts"
   - `class ElevationServer { ElevationServer(string pipeName, IEnumerable<IElevatedOperationHandler> handlers, TimeSpan idleTimeout); Task RunAsync(CancellationToken ct); }`
   - `ElevationServer.RunAsync`：在命名管道`pipeName`上循环接受连接，按`ElevationRequest.OperationType`匹配`handlers`里对应的`IElevatedOperationHandler`并调用，把结果写回；连续`idleTimeout`时间没有新连接就让`RunAsync`自然返回（调用方在`Program.cs`里据此退出进程）。找不到匹配`OperationType`的handler时返回`ElevationResponse(false, "unknown operation: {type}", null)`。
 
-- [ ] **Step 1: 搭建 `PowerTools.ElevatedHelper` 控制台项目骨架，加入解决方案**
+- [ ] **Step 1: 搭建 `TidyBox.ElevatedHelper` 控制台项目骨架，加入解决方案**
 
 ```bash
-dotnet new console -n PowerTools.ElevatedHelper -o src/PowerTools.ElevatedHelper -f net8.0
-dotnet new xunit -n PowerTools.ElevatedHelper.Tests -o tests/PowerTools.ElevatedHelper.Tests -f net8.0
-dotnet sln PowerTools.sln add src/PowerTools.ElevatedHelper/PowerTools.ElevatedHelper.csproj tests/PowerTools.ElevatedHelper.Tests/PowerTools.ElevatedHelper.Tests.csproj
-dotnet add src/PowerTools.ElevatedHelper reference src/PowerTools.Core
-dotnet add tests/PowerTools.ElevatedHelper.Tests reference src/PowerTools.ElevatedHelper
-dotnet add tests/PowerTools.ElevatedHelper.Tests reference src/PowerTools.Core
+dotnet new console -n TidyBox.ElevatedHelper -o src/TidyBox.ElevatedHelper -f net8.0
+dotnet new xunit -n TidyBox.ElevatedHelper.Tests -o tests/TidyBox.ElevatedHelper.Tests -f net8.0
+dotnet sln TidyBox.sln add src/TidyBox.ElevatedHelper/TidyBox.ElevatedHelper.csproj tests/TidyBox.ElevatedHelper.Tests/TidyBox.ElevatedHelper.Tests.csproj
+dotnet add src/TidyBox.ElevatedHelper reference src/TidyBox.Core
+dotnet add tests/TidyBox.ElevatedHelper.Tests reference src/TidyBox.ElevatedHelper
+dotnet add tests/TidyBox.ElevatedHelper.Tests reference src/TidyBox.Core
 ```
 
 - [ ] **Step 2: 运行 `dotnet build`，确认骨架编译通过**
 
-Run: `dotnet build PowerTools.sln`
+Run: `dotnet build TidyBox.sln`
 Expected: Build succeeded
 
 - [ ] **Step 3: 写失败的测试：用一个假的 `IElevatedOperationHandler`，验证服务端能通过命名管道收发消息；并验证"未知OperationType"和"空闲超时后RunAsync返回"两种情况**
@@ -293,7 +293,7 @@ public class ElevationServerTests
 
 - [ ] **Step 4: 运行测试，确认失败（`ElevationServer`/`IElevatedOperationHandler`不存在）**
 
-Run: `dotnet test tests/PowerTools.ElevatedHelper.Tests`
+Run: `dotnet test tests/TidyBox.ElevatedHelper.Tests`
 Expected: FAIL
 
 - [ ] **Step 5: 实现 `IElevatedOperationHandler` 和 `ElevationServer`**
@@ -304,13 +304,13 @@ Expected: FAIL
 
 - [ ] **Step 7: 运行测试，确认通过**
 
-Run: `dotnet test tests/PowerTools.ElevatedHelper.Tests`
+Run: `dotnet test tests/TidyBox.ElevatedHelper.Tests`
 Expected: PASS，3个测试全部通过
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/PowerTools.ElevatedHelper tests/PowerTools.ElevatedHelper.Tests PowerTools.sln
+git add src/TidyBox.ElevatedHelper tests/TidyBox.ElevatedHelper.Tests TidyBox.sln
 git commit -m "feat: add elevated helper process with named-pipe IPC server"
 ```
 
@@ -319,11 +319,11 @@ git commit -m "feat: add elevated helper process with named-pipe IPC server"
 ## Task 4: 提权客户端
 
 **Files:**
-- Create: `src/PowerTools.Core/Elevation/IElevationClient.cs`
-- Create: `src/PowerTools.Core/Elevation/ElevationClient.cs`
-- Create: `src/PowerTools.Core/Elevation/IHelperProcessLauncher.cs`
-- Test: `tests/PowerTools.Core.Tests/Elevation/ElevationClientTests.cs`
-- Modify: `tests/PowerTools.Core.Tests/PowerTools.Core.Tests.csproj`（加一条对`src/PowerTools.ElevatedHelper`的项目引用——Task 3的`ElevationServer`定义在那个项目里，本任务的测试要启动一个真实`ElevationServer`来验证`ElevationClient`，这个引用在之前任何任务里都没加过，是本任务必须补的前置步骤）
+- Create: `src/TidyBox.Core/Elevation/IElevationClient.cs`
+- Create: `src/TidyBox.Core/Elevation/ElevationClient.cs`
+- Create: `src/TidyBox.Core/Elevation/IHelperProcessLauncher.cs`
+- Test: `tests/TidyBox.Core.Tests/Elevation/ElevationClientTests.cs`
+- Modify: `tests/TidyBox.Core.Tests/TidyBox.Core.Tests.csproj`（加一条对`src/TidyBox.ElevatedHelper`的项目引用——Task 3的`ElevationServer`定义在那个项目里，本任务的测试要启动一个真实`ElevationServer`来验证`ElevationClient`，这个引用在之前任何任务里都没加过，是本任务必须补的前置步骤）
 
 **Interfaces:**
 - Consumes: `ElevationRequest`/`ElevationResponse`（Task 2）
@@ -333,15 +333,15 @@ git commit -m "feat: add elevated helper process with named-pipe IPC server"
   - `interface IElevationClient { Task<ElevationResponse> ExecuteAsync(ElevationRequest request, CancellationToken ct = default); }`
   - `class ElevationClient : IElevationClient`，构造函数接收`string pipeName`和`IHelperProcessLauncher launcher`
 
-- [ ] **Step 1: 补项目引用，让 `PowerTools.Core.Tests` 能用到 Task 3 的 `ElevationServer`**
+- [ ] **Step 1: 补项目引用，让 `TidyBox.Core.Tests` 能用到 Task 3 的 `ElevationServer`**
 
 ```bash
-dotnet add tests/PowerTools.Core.Tests reference src/PowerTools.ElevatedHelper
+dotnet add tests/TidyBox.Core.Tests reference src/TidyBox.ElevatedHelper
 ```
 
 - [ ] **Step 2: 写失败的测试，覆盖Review Focus里三条：已运行直接连接发送；未运行则调用Launch再连接；UAC取消（launcher抛异常）时返回失败而不抛出；空闲超时后管道已失效时能重新拉起**
 
-测试里需要一个简单的echo处理器验证双方能收发——Task 3 的 `ElevationServerTests` 里的`EchoHandler`是那个测试文件私有的类，不能跨项目直接引用，本任务在自己的测试文件里新定义一个同样逻辑的`EchoHandler`测试替身（几行代码，不算重复劳动，是两个独立测试项目各自的测试替身）；但`ElevationServer`本身是`PowerTools.ElevatedHelper`项目里的生产类，直接`using`该项目的命名空间复用即可，不要重新实现一遍服务端逻辑。
+测试里需要一个简单的echo处理器验证双方能收发——Task 3 的 `ElevationServerTests` 里的`EchoHandler`是那个测试文件私有的类，不能跨项目直接引用，本任务在自己的测试文件里新定义一个同样逻辑的`EchoHandler`测试替身（几行代码，不算重复劳动，是两个独立测试项目各自的测试替身）；但`ElevationServer`本身是`TidyBox.ElevatedHelper`项目里的生产类，直接`using`该项目的命名空间复用即可，不要重新实现一遍服务端逻辑。
 
 ```csharp
 public class ElevationClientTests
@@ -365,7 +365,7 @@ public class ElevationClientTests
     public async Task ExecuteAsync_HelperAlreadyRunning_DoesNotLaunchAgain()
     {
         var launcher = new FakeLauncher { Running = true };
-        // ...启动一个真实ElevationServer（同PowerTools.Core.Tests里引用ElevatedHelper项目或复刻一个最小echo server）
+        // ...启动一个真实ElevationServer（同TidyBox.Core.Tests里引用ElevatedHelper项目或复刻一个最小echo server）
         // 断言 launcher.LaunchCount == 0，且 ExecuteAsync 正常拿到响应
     }
 
@@ -404,7 +404,7 @@ public class ElevationClientTests
 
 - [ ] **Step 3: 运行测试，确认失败**
 
-Run: `dotnet test tests/PowerTools.Core.Tests --filter ElevationClientTests`
+Run: `dotnet test tests/TidyBox.Core.Tests --filter ElevationClientTests`
 Expected: FAIL
 
 - [ ] **Step 4: 实现 `IHelperProcessLauncher`（真实版用`Process.Start(new ProcessStartInfo { UseShellExecute = true, Verb = "runas", FileName = ..., Arguments = pipeName })`）、`ElevationClient`**
@@ -412,17 +412,17 @@ Expected: FAIL
 `ElevationClient.ExecuteAsync`逻辑：
 1. 若`launcher.IsHelperRunning(pipeName)`为false，调用`launcher.LaunchElevated(pipeName)`；若抛异常，直接返回`ElevationResponse(false, ex.Message, null)`。
 2. 尝试连接管道（设超时，比如5秒）。连接失败（比如管道其实已经不在、Review Focus里"空闲超时后又来新请求"的情况）：把这次当成"其实没在运行"，调用一次`launcher.LaunchElevated(pipeName)`重试连接一次；仍失败才真正返回失败。
-3. 连接成功后用`PipeMessageFraming.WriteAsync`/`ReadAsync`（Task 3 已加在`PowerTools.Core.Elevation`，4字节长度前缀）发送`ElevationRequest`、读取`ElevationResponse`并返回。**不要**直接对pipe用`JsonSerializer.SerializeAsync/DeserializeAsync`——Byte模式管道没有EOF，反序列化会永久挂起。
+3. 连接成功后用`PipeMessageFraming.WriteAsync`/`ReadAsync`（Task 3 已加在`TidyBox.Core.Elevation`，4字节长度前缀）发送`ElevationRequest`、读取`ElevationResponse`并返回。**不要**直接对pipe用`JsonSerializer.SerializeAsync/DeserializeAsync`——Byte模式管道没有EOF，反序列化会永久挂起。
 
 - [ ] **Step 5: 运行测试，确认通过**
 
-Run: `dotnet test tests/PowerTools.Core.Tests --filter ElevationClientTests`
+Run: `dotnet test tests/TidyBox.Core.Tests --filter ElevationClientTests`
 Expected: PASS
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/PowerTools.Core/Elevation tests/PowerTools.Core.Tests/Elevation tests/PowerTools.Core.Tests/PowerTools.Core.Tests.csproj
+git add src/TidyBox.Core/Elevation tests/TidyBox.Core.Tests/Elevation tests/TidyBox.Core.Tests/TidyBox.Core.Tests.csproj
 git commit -m "feat: add elevation client with UAC-decline and stale-pipe retry handling"
 ```
 
@@ -431,9 +431,9 @@ git commit -m "feat: add elevation client with UAC-decline and stale-pipe retry 
 ## Task 5: WinUI3 外壳App
 
 **Files:**
-- Create: `src/PowerTools.App/PowerTools.App.csproj`
-- Create: `src/PowerTools.App/App.xaml` / `App.xaml.cs`
-- Create: `src/PowerTools.App/MainWindow.xaml` / `MainWindow.xaml.cs`
+- Create: `src/TidyBox.App/TidyBox.App.csproj`
+- Create: `src/TidyBox.App/App.xaml` / `App.xaml.cs`
+- Create: `src/TidyBox.App/MainWindow.xaml` / `MainWindow.xaml.cs`
 
 **Interfaces:**
 - Consumes: `ModuleRegistry`/`IToolModule`（Task 1）
@@ -441,15 +441,15 @@ git commit -m "feat: add elevation client with UAC-decline and stale-pipe retry 
 
 - [ ] **Step 1: 手写WinUI3项目骨架（不要用 `dotnet new winui3`——预检查确认当前环境的 `dotnet new list` 不包含这个模板，WinUI3项目模板只在Visual Studio的"新建项目"向导里注册，CLI拿不到；手动创建 `.csproj` 和空的XAML文件即可，WinUI3项目本质就是一个带特定属性/包引用的SDK风格csproj，不依赖那个模板）**
 
-手动创建 `src/PowerTools.App/PowerTools.App.csproj`，关键属性：
+手动创建 `src/TidyBox.App/TidyBox.App.csproj`，关键属性：
 - `<TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>`
 - `<TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>`（对应约束"只支持Windows 11"，实际运行时门槛在后续Task 6的manifest里用`TargetDeviceFamily`进一步收紧到Win11）
 - `<OutputType>WinExe</OutputType>`，`<UseWinUI>true</UseWinUI>`
 - PackageReference: `Microsoft.WindowsAppSDK`（当前稳定版）、`Microsoft.Windows.SDK.BuildTools`
-- 项目引用 `PowerTools.Core`
+- 项目引用 `TidyBox.Core`
 
 ```bash
-dotnet sln PowerTools.sln add src/PowerTools.App/PowerTools.App.csproj
+dotnet sln TidyBox.sln add src/TidyBox.App/TidyBox.App.csproj
 ```
 
 之后创建最小的 `App.xaml`/`App.xaml.cs`（标准WinUI3应用入口样板）和 `MainWindow.xaml`/`MainWindow.xaml.cs`（下一步再填内容）。
@@ -462,7 +462,7 @@ dotnet sln PowerTools.sln add src/PowerTools.App/PowerTools.App.csproj
 
 - [ ] **Step 4: 手动验证：运行 `dotnet build` + 本机启动App，确认窗口能打开、导航为空列表时不崩溃**
 
-Run: `dotnet build src/PowerTools.App` 然后在Visual Studio或`dotnet run`启动
+Run: `dotnet build src/TidyBox.App` 然后在Visual Studio或`dotnet run`启动
 Expected: 窗口正常打开，没有异常对话框
 
 - [ ] **Step 5: 手动验证Review Focus第4条：临时注册一个`InitializeAsync()`里直接`throw`的假模块，确认App仍能正常打开而不是崩溃，之后把这个临时假模块代码删掉**
@@ -470,7 +470,7 @@ Expected: 窗口正常打开，没有异常对话框
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/PowerTools.App PowerTools.sln
+git add src/TidyBox.App TidyBox.sln
 git commit -m "feat: add WinUI3 shell app with graceful module-load-failure handling"
 ```
 
@@ -479,14 +479,14 @@ git commit -m "feat: add WinUI3 shell app with graceful module-load-failure hand
 ## Task 6: MSIX打包项目
 
 **Files:**
-- Create: `src/PowerTools.Packaging/PowerTools.Packaging.wapproj`
-- Create: `src/PowerTools.Packaging/Package.appxmanifest`
+- Create: `src/TidyBox.Packaging/TidyBox.Packaging.wapproj`
+- Create: `src/TidyBox.Packaging/Package.appxmanifest`
 
 **Interfaces:**
-- Consumes: `PowerTools.App`（Task 5）作为打包目标
+- Consumes: `TidyBox.App`（Task 5）作为打包目标
 - Produces: 无（这是解决方案的终端打包产物）
 
-- [ ] **Step 1: 创建Windows Application Packaging Project，加入解决方案，设置`PowerTools.App`为打包目标**
+- [ ] **Step 1: 创建Windows Application Packaging Project，加入解决方案，设置`TidyBox.App`为打包目标**
 
 （这一步在Visual Studio里用"添加新项目 > Windows应用程序打包项目"模板操作，命令行`dotnet`工具链对`.wapproj`支持有限，手动在IDE里完成并记录到本步骤）
 
@@ -504,7 +504,7 @@ Expected: 标准账户下双击打开App，窗口正常显示，不触发任何U
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/PowerTools.Packaging PowerTools.sln
+git add src/TidyBox.Packaging TidyBox.sln
 git commit -m "feat: add MSIX packaging project with runFullTrust capability, Windows 11 minimum version"
 ```
 

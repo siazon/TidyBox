@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "TidyBox.App (Package)": {
+      "commandName": "MsixPackage"
+    }
+  }
+}

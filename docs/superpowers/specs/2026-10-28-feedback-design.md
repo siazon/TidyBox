@@ -5,12 +5,12 @@
 
 ## 1. 意图
 
-在 PowerTools 里加一个"发送反馈"入口：用户写完点提交，请求发到作者自己的 Cloudflare Worker，存进 D1 数据库，作者事后自己查看。目的是在不依赖 Store 评论的情况下，直接拿到用户的建议和错误报告。
+在 TidyBox 里加一个"发送反馈"入口：用户写完点提交，请求发到作者自己的 Cloudflare Worker，存进 D1 数据库，作者事后自己查看。目的是在不依赖 Store 评论的情况下，直接拿到用户的建议和错误报告。
 
 ## 2. 用户已定
 
 - 后端用 **Cloudflare Workers + D1**。
-- 反馈内容：**文字 + 可选的联系方式 + PowerTools 版本号**。
+- 反馈内容：**文字 + 可选的联系方式 + TidyBox 版本号**。
 - 用户选择"错误"类型时，**还要带上相关日志**。
 - 先写 plan，不再逐项确认。
 
@@ -23,7 +23,7 @@
 | 3 | 日志发送前**脱敏**：用户目录路径→`%USERPROFILE%`，用户名→`<user>`，机器名→`<machine>` | 日志里的异常堆栈和路径会带用户名 |
 | 4 | 日志只取最近 **64 KB**（在行边界截断） | 控制体积 |
 | 5 | 服务器**只存 IP 的哈希**（SHA-256 + 服务端密钥盐），不存原始 IP | 仅用于防刷，减少隐私负担 |
-| 6 | 不收集系统版本、硬件、设备 ID，只有 PowerTools 版本号 | 用户只要求版本号 |
+| 6 | 不收集系统版本、硬件、设备 ID，只有 TidyBox 版本号 | 用户只要求版本号 |
 | 7 | 防滥用：单个 IP 哈希每小时最多 **5** 条；全站每天最多 **2000** 条 | 桌面应用没法保管密钥，接口只能公开，靠限额兜底 |
 | 8 | 发送失败（含网络不通）时对话框**保持打开、内容保留**，不做本地队列/自动重试 | 目标用户在中国大陆，`*.workers.dev` 可能连不上；本版先把失败说清楚，队列留到有需要时 |
 | 9 | 反馈地址写成一个常量，**为空时隐藏整个反馈入口** | 在作者部署 Worker、拿到域名之前，功能不会暴露一个坏掉的入口 |
@@ -34,7 +34,7 @@
 **目标**
 - 设置页里有"发送反馈…"，弹出对话框：类型、内容、联系方式（可选）、（错误类型）附带日志复选框和预览。
 - Worker 校验后写入 D1，返回明确的状态码。
-- PowerTools 有一个最小的文件日志，记录启动、未处理异常、模块加载失败、任务栏单词条失败。
+- TidyBox 有一个最小的文件日志，记录启动、未处理异常、模块加载失败、任务栏单词条失败。
 - 隐私声明（`docs/store-submission.md` 与一份可发布的短隐私说明）如实更新。
 
 **非目标（本版不做）**
@@ -49,7 +49,7 @@
 
 ## 5. 约束
 
-- Windows 11 only；PowerTools 是 MSIX 全信任，普通权限运行。
+- Windows 11 only；TidyBox 是 MSIX 全信任，普通权限运行。
 - 新增网络访问意味着 Store 隐私声明从"不联网"变为"仅在用户主动提交反馈时联网"；Partner Center 表单要同步，可能要提供隐私政策链接。
 - Worker 是 TypeScript，放在仓库的 `server/feedback-worker/`；测试用 `@cloudflare/vitest-plugin`（旧名 `@cloudflare/vitest-pool-workers` 已废弃；peer 为 `vitest ^4.1 || ^5`），`vitest` 取 `^4.1`。
 - 部署需要作者自己的 Cloudflare 账号登录，以及一个托管在 Cloudflare 上的域名（大陆可达性）；这些步骤只能由用户完成。
@@ -86,8 +86,8 @@
 
 ## 8. 客户端
 
-- `PowerTools.Core/Feedback/`：`FeedbackKind`、`FeedbackSubmission`、`FeedbackLimits`、`FeedbackResult`、`FeedbackClient`（`HttpClient`，10 秒超时）。结果映射：201→已发送；400/413→被拒绝；429/503→太频繁；其它状态码、网络错误、超时→无法连接。用户主动取消不算失败，照常抛 `OperationCanceledException`。
-- `PowerTools.Core/Logging/`：`AppLog`（文件日志，`%LOCALAPPDATA%\PowerTools\logs\powertools.log`，超过 512 KB 滚动为 `.1.log`，只保留一份旧的；永不抛异常；每行同步写入，崩溃前也能落盘）和 `LogRedactor`（脱敏）。
+- `TidyBox.Core/Feedback/`：`FeedbackKind`、`FeedbackSubmission`、`FeedbackLimits`、`FeedbackResult`、`FeedbackClient`（`HttpClient`，10 秒超时）。结果映射：201→已发送；400/413→被拒绝；429/503→太频繁；其它状态码、网络错误、超时→无法连接。用户主动取消不算失败，照常抛 `OperationCanceledException`。
+- `TidyBox.Core/Logging/`：`AppLog`（文件日志，`%LOCALAPPDATA%\TidyBox\logs\tidybox.log`，超过 512 KB 滚动为 `.1.log`，只保留一份旧的；永不抛异常；每行同步写入，崩溃前也能落盘）和 `LogRedactor`（脱敏）。
 - App 层：设置页新增"反馈"区与 `FeedbackDialog`；`FeedbackConfig.Endpoint` 常量；版本号来自 `Package.Current.Id.Version`。
 - 埋点只有四处：启动（含版本号）、未处理异常（`App.UnhandledException`、`AppDomain.UnhandledException`、`TaskScheduler.UnobservedTaskException`）、模块加载失败、单词条无法显示。日志里**只有**这些，所以"相关日志"的覆盖面是有限的，这点要让用户预期到。
 
@@ -101,7 +101,7 @@
 
 - Worker：`vitest` + `@cloudflare/vitest-plugin`，用真实的 D1（Miniflare）应用 migrations，覆盖校验、限额、写库。
 - Core：xUnit，`FeedbackClient` 用假的 `HttpMessageHandler`（不走真实网络）；`AppLog`、`LogRedactor` 用临时目录。
-- 手动：用 `wrangler dev` 起本地 Worker，在 PowerTools（Debug 构建可用环境变量覆盖地址）里真实提交一条建议和一条带日志的错误，再用 `npm run list` 看库里的内容；部署后再做一次端到端。
+- 手动：用 `wrangler dev` 起本地 Worker，在 TidyBox（Debug 构建可用环境变量覆盖地址）里真实提交一条建议和一条带日志的错误，再用 `npm run list` 看库里的内容；部署后再做一次端到端。
 - 普通 `dotnet build` 不会刷新已注册 dev 包的布局，需要运行 App 的验证按之前的做法同步 AppX 布局。
 
 ## 11. 留给实现者决定

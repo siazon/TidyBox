@@ -16,7 +16,7 @@
 
 - 现有 `DirectoryScanner.ScanAsync`（扁平快照）保持签名和行为不变，它的测试继续有效；内部改为从树投影出顶层条目，避免遍历两次。
 - WinUI3 没有现成的树表控件：引擎层提供"压平的可见行列表"（`DiskTreeModel`），界面用 `ListView` + 每行一个 Grid 来渲染，展开/折叠时对 `ObservableCollection` 增删行，保持滚动位置。
-- 业务逻辑（树构建、占比、排序、展开状态）全部放在 `PowerTools.Modules.DiskAnalyzer`，可单测；页面代码只做绑定和事件转发。
+- 业务逻辑（树构建、占比、排序、展开状态）全部放在 `TidyBox.Modules.DiskAnalyzer`，可单测；页面代码只做绑定和事件转发。
 
 ## Tasks
 

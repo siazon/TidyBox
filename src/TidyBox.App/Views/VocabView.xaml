@@ -1,0 +1,17 @@
+<Page
+    x:Class="TidyBox.App.Views.VocabView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+    <StackPanel Margin="24,16,24,16" Spacing="12">
+        <TextBlock Text="背单词" Style="{StaticResource TitleTextBlockStyle}" />
+        <TextBlock Text="在任务栏托盘左侧，每 5 秒轮换显示词表里的一个单词和释义。" TextWrapping="Wrap" Opacity="0.7" />
+
+        <Button Content="选择词表…" Click="OnPickClick" />
+        <TextBlock x:Name="PathText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+        <TextBlock x:Name="StatusText" TextWrapping="Wrap" />
+
+        <ToggleSwitch x:Name="ShowSwitch" Header="显示在任务栏" OnContent="开" OffContent="关" Toggled="OnShowToggled" />
+    </StackPanel>
+</Page>

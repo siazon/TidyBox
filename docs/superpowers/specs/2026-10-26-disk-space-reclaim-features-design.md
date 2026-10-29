@@ -15,7 +15,7 @@
 - **需要 spike 验证**：`SHEmptyRecycleBinW` 在 MSIX 包身份下能否直接调用、是否需要额外 capability、是否受 AppContainer 限制。这个放进 Task 1 的机制验证里，和下面孤儿目录/Workshop 的验证一起做。
 
 ### 0.2 隔离区：加大小展示 + 手动清空 + 默认保留期
-- `ElevatedHelper` 侧 `RemoveResidualHandler` 已有的隔离目录（`ProgramData\PowerTools\Quarantine`）增加：
+- `ElevatedHelper` 侧 `RemoveResidualHandler` 已有的隔离目录（`ProgramData\TidyBox\Quarantine`）增加：
   - 一个只读查询操作（新 `IElevatedOperationHandler`：`quarantine.inspect`，返回总大小 + 各次清理的时间戳子目录列表），不需要新开权限，复用现有管道。
   - 一个清空操作（`quarantine.purge`，同样走提权帮手，因为隔离区本身是管理员权限创建的，普通用户进程未必能直接删）。
   - 默认保留策略：**不做自动静默删除**（隔离区的意义就是给用户后悔的机会，自动删除会违背这个设计前提）；改为在 UI 入口提示"隔离区已保留超过 30 天的清理，占用 X GB，是否清空"，由用户确认，不做后台定时任务。
@@ -43,10 +43,10 @@
 
 ### 文件结构
 ```
-src/PowerTools.Modules.DiskAnalyzer/Steam/
+src/TidyBox.Modules.DiskAnalyzer/Steam/
   OrphanFolderScanner.cs      扫描 + 白名单过滤 + 大小测量
   OrphanGameFolder.cs         record：LibraryPath, FolderName, FullPath, SizeBytes, LastWriteTimeUtc
-tests/PowerTools.Modules.DiskAnalyzer.Tests/Steam/OrphanFolderScannerTests.cs
+tests/TidyBox.Modules.DiskAnalyzer.Tests/Steam/OrphanFolderScannerTests.cs
 ```
 
 ### Review Focus（易错点）
@@ -74,10 +74,10 @@ tests/PowerTools.Modules.DiskAnalyzer.Tests/Steam/OrphanFolderScannerTests.cs
 
 ### 文件结构
 ```
-src/PowerTools.Modules.DiskAnalyzer/Steam/
+src/TidyBox.Modules.DiskAnalyzer/Steam/
   WorkshopResidueScanner.cs
   WorkshopResidueItem.cs      record：AppId, GameNameOrNull, FullPath, SizeBytes
-src/PowerTools.Core/Cache/
+src/TidyBox.Core/Cache/
   SteamAppCache.cs            读写 cache.db 的 steam_apps 表（见第 4 节）
 ```
 
@@ -99,9 +99,9 @@ Steam 客户端已支持 Shift+多选批量卸载，所以"能不能多选"不�
 
 ### 文件结构
 ```
-src/PowerTools.Modules.Uninstaller/
+src/TidyBox.Modules.Uninstaller/
   Routing/BatchPreview.cs     PreviewBatchAsync 用的 record + 汇总逻辑
-src/PowerTools.App/Views/UninstallerView.xaml(.cs)   多选 UI + 预览条 + 进度
+src/TidyBox.App/Views/UninstallerView.xaml(.cs)   多选 UI + 预览条 + 进度
 ```
 
 ---
@@ -121,7 +121,7 @@ src/PowerTools.App/Views/UninstallerView.xaml(.cs)   多选 UI + 预览条 + 进
 - 维护方式不变：开发者离线用 LLM 辅助批量生成候选 + 人工抽样核对后更新 JSON 文件，不在运行时联网更新。
 - 规模即使到几千条，整份加载进内存也是几百 KB 级别，没有性能问题。
 
-### (b) `Cache.json`——可写，`%LOCALAPPDATA%\PowerTools\Cache.json`，程序自己维护
+### (b) `Cache.json`——可写，`%LOCALAPPDATA%\TidyBox\Cache.json`，程序自己维护
 ```json
 {
   "steamApps": { "413150": { "name": "Stardew Valley", "lastSeenUtc": "..." } },
@@ -161,7 +161,7 @@ src/PowerTools.App/Views/UninstallerView.xaml(.cs)   多选 UI + 预览条 + 进
 
 全部完成，按 commit 顺序：
 
-1. `refactor: move IRecycleBin to PowerTools.Core` — 模块共享基础设施
+1. `refactor: move IRecycleBin to TidyBox.Core` — 模块共享基础设施
 2. `feat: add KnownSharedFolders whitelist` — §1 白名单
 3. `feat: add OrphanFolderScanner` — §1 核心扫描逻辑
 4. `feat: expose orphan folder detection ... on DiskAnalyzerModule` — §1 模块接入

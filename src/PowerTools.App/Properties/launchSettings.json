@@ -1,7 +1,0 @@
-{
-  "profiles": {
-    "PowerTools.App (Package)": {
-      "commandName": "MsixPackage"
-    }
-  }
-}

@@ -4,7 +4,7 @@
 
 **Goal:** 实现卸载工具作为一个 `IToolModule`：一个统一的"已安装项目"列表（Win32 / Microsoft Store / Steam），按来源路由到三种卸载机制；Win32 卸载后做残留扫描，结果分组展示，用户勾选后**可恢复地**删除。
 
-**Architecture:** 新增 `PowerTools.Modules.Uninstaller` 类库（纯逻辑，依赖 `PowerTools.Core`，**不引用**磁盘分析模块）。三个来源各有一个"目录"（读取已安装项目）；`UninstallRouter` 按来源分发；`ResidueScanner` 在卸载前后各扫一次已知根目录/注册表根，得出"仍然存在且与该应用相关"的残留；`ResidueRemover` 把文件夹送进回收站；注册表残留只展示不删除（包身份下删不掉，见 spike）。需要管理员权限的文件夹（`Program Files`、`ProgramData`）通过已有的 `IElevationClient` 交给提权帮手，帮手端用**白名单**自行再校验路径。注册表/文件系统根都可注入，测试在沙箱里跑。
+**Architecture:** 新增 `TidyBox.Modules.Uninstaller` 类库（纯逻辑，依赖 `TidyBox.Core`，**不引用**磁盘分析模块）。三个来源各有一个"目录"（读取已安装项目）；`UninstallRouter` 按来源分发；`ResidueScanner` 在卸载前后各扫一次已知根目录/注册表根，得出"仍然存在且与该应用相关"的残留；`ResidueRemover` 把文件夹送进回收站；注册表残留只展示不删除（包身份下删不掉，见 spike）。需要管理员权限的文件夹（`Program Files`、`ProgramData`）通过已有的 `IElevationClient` 交给提权帮手，帮手端用**白名单**自行再校验路径。注册表/文件系统根都可注入，测试在沙箱里跑。
 
 **Tech Stack:** .NET 8（`net8.0-windows10.0.19041.0`，为了 `Windows.Management.Deployment.PackageManager`）, xUnit, `Microsoft.Win32.Registry`, `Microsoft.VisualBasic.FileIO`（回收站）, WinUI3。
 
@@ -17,7 +17,7 @@
 - **注册表残留只展示、不提供删除**（Task 1 实测：包身份下 `HKCU` 和 `HKLM` 的删除都被虚拟化，真实键删不掉，见 `2026-10-25-uninstaller-mechanism-spike.md`）。因此本模块不写 `.reg` 备份、不删注册表。
 - 残留结果必须分组/过滤，**不能**把原始 diff 甩给用户（设计文档第 5 条，吸取 Revo 反馈）。
 - 不把 GPL 项目的代码编译进来；Bulk Crap Uninstaller（Apache 2.0）可借鉴思路。
-- 模块之间不互相引用内部实现：本模块**不**引用 `PowerTools.Modules.DiskAnalyzer`。
+- 模块之间不互相引用内部实现：本模块**不**引用 `TidyBox.Modules.DiskAnalyzer`。
 - 免费范围：列表、三条卸载路由、卸载后残留扫描与审核删除。**不在本计划内**：强制残留清理（程序已卸载/卸载失败时仍强删）、批量卸载（付费功能，等付费解锁机制定了再做）、非 Steam 大型应用识别、卸载**前**的安装监控。
 - 用户可见文案用简体中文。
 - 应用以 MSIX 包身份运行：`HKCU\Software` 下的写入/删除默认被虚拟化，`unvirtualizedResources` 目前只排除了 `Software\Classes` 和 `Shell Extensions`。**不要为了本模块把排除范围扩大到整个 `HKCU\Software`**，是否可行由 Task 1 决定。
@@ -45,8 +45,8 @@
 ## File Structure
 
 ```
-src/PowerTools.Modules.Uninstaller/
-  PowerTools.Modules.Uninstaller.csproj
+src/TidyBox.Modules.Uninstaller/
+  TidyBox.Modules.Uninstaller.csproj
   Model/InstalledApp.cs            InstalledApp / AppSource / UninstallCommand
   Catalog/Win32AppCatalog.cs       读三个 Uninstall 根，过滤，识别 Steam
   Catalog/IStorePackageSource.cs   接口 + StorePackage 记录 + 真实实现（PackageManager）
@@ -59,12 +59,12 @@ src/PowerTools.Modules.Uninstaller/
   Residue/ResidueRemover.cs        文件夹进回收站；需要提权的走 IElevationClient；注册表项拒绝
   Residue/IRecycleBin.cs           接口 + 真实实现
   UninstallerModule.cs             IToolModule + 对界面暴露的工作流
-src/PowerTools.ElevatedHelper/RemoveResidualHandler.cs   uninstall.removeResidual 的帮手端实现（白名单校验）
-tests/PowerTools.Modules.Uninstaller.Tests/
-  Support/RegistrySandbox.cs       Uninstall 根沙箱（HKCU\Software\PowerToolsTests\<guid>）
+src/TidyBox.ElevatedHelper/RemoveResidualHandler.cs   uninstall.removeResidual 的帮手端实现（白名单校验）
+tests/TidyBox.Modules.Uninstaller.Tests/
+  Support/RegistrySandbox.cs       Uninstall 根沙箱（HKCU\Software\TidyBoxTests\<guid>）
   ... 与上面一一对应的测试文件
-tests/PowerTools.ElevatedHelper.Tests/RemoveResidualHandlerTests.cs
-src/PowerTools.App/Views/UninstallerView.xaml(.cs)   界面
+tests/TidyBox.ElevatedHelper.Tests/RemoveResidualHandlerTests.cs
+src/TidyBox.App/Views/UninstallerView.xaml(.cs)   界面
 docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结论记录
 ```
 
@@ -81,7 +81,7 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
 
 - [ ] **Step 1: 验证 A——Store 应用卸载。** 找一个无害、可随时重装的 Store 应用（如"便笺"以外的小应用，用后在 Store 重装）。在**已部署的 MSIX 包**里（临时在 App 里加一个按钮，验证完删掉）依次试：(1) `new PackageManager().RemovePackageAsync(fullName)`；(2) 失败的话，`Process.Start("powershell.exe", "-NoProfile -Command Remove-AppxPackage <fullName>")`。记录：各自是否成功、报什么错（`ERROR_ACCESS_DENIED` / 需要 `packageManagement` 能力 / 其他）、是否弹 UAC。
 
-- [ ] **Step 2: 验证 B——注册表残留能否真正删除。** 在真实注册表里手建 `HKCU\Software\PowerToolsSpike\Leftover` 和 `HKLM\SOFTWARE\PowerToolsSpike\Leftover`（用 `regedit` 建，不要在包里建）。从已部署的 MSIX 包里分别：用 `RegistryKey.DeleteSubKeyTree` 删 `HKCU` 那个；通过提权帮手删 `HKLM` 那个。用 `regedit` 查看**真实**注册表，记录是否真的被删掉（被虚拟化的话包内读取显示已删、`regedit` 里仍在）。
+- [ ] **Step 2: 验证 B——注册表残留能否真正删除。** 在真实注册表里手建 `HKCU\Software\TidyBoxSpike\Leftover` 和 `HKLM\SOFTWARE\TidyBoxSpike\Leftover`（用 `regedit` 建，不要在包里建）。从已部署的 MSIX 包里分别：用 `RegistryKey.DeleteSubKeyTree` 删 `HKCU` 那个；通过提权帮手删 `HKLM` 那个。用 `regedit` 查看**真实**注册表，记录是否真的被删掉（被虚拟化的话包内读取显示已删、`regedit` 里仍在）。
 
 - [ ] **Step 3: 验证 C——Steam 登记形态。** 读取本机 `HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Steam App *`，记录 `DisplayName`、`UninstallString` 的真实内容，确认能靠 `steam://uninstall/<digits>` 识别；记录有没有已装 Steam 但没有这类键的游戏。
 
@@ -101,10 +101,10 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
 ## Task 2: Win32 与 Steam 目录
 
 **Files:**
-- Create: `src/PowerTools.Modules.Uninstaller/PowerTools.Modules.Uninstaller.csproj`（`net8.0-windows10.0.19041.0`，引用 `PowerTools.Core`，`InternalsVisibleTo` 测试项目）
-- Create: `src/PowerTools.Modules.Uninstaller/Model/InstalledApp.cs`, `src/PowerTools.Modules.Uninstaller/Catalog/Win32AppCatalog.cs`
-- Create: `tests/PowerTools.Modules.Uninstaller.Tests/PowerTools.Modules.Uninstaller.Tests.csproj`, `Support/RegistrySandbox.cs`, `Catalog/Win32AppCatalogTests.cs`
-- Modify: `PowerTools.sln`（只加这两个新项目；**该文件里已有用户未提交的 `App1` 改动，不要整理、不要还原，只追加**）
+- Create: `src/TidyBox.Modules.Uninstaller/TidyBox.Modules.Uninstaller.csproj`（`net8.0-windows10.0.19041.0`，引用 `TidyBox.Core`，`InternalsVisibleTo` 测试项目）
+- Create: `src/TidyBox.Modules.Uninstaller/Model/InstalledApp.cs`, `src/TidyBox.Modules.Uninstaller/Catalog/Win32AppCatalog.cs`
+- Create: `tests/TidyBox.Modules.Uninstaller.Tests/TidyBox.Modules.Uninstaller.Tests.csproj`, `Support/RegistrySandbox.cs`, `Catalog/Win32AppCatalogTests.cs`
+- Modify: `TidyBox.sln`（只加这两个新项目；**该文件里已有用户未提交的 `App1` 改动，不要整理、不要还原，只追加**）
 
 **Interfaces:**
 - Produces: `enum AppSource { Win32, Store, Steam }`
@@ -118,9 +118,9 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
   - `Reads_estimated_size_kb_as_bytes`（`EstimatedSize` 是 KB 的 DWORD，`InstallDate` 是 `yyyyMMdd` 字符串，格式坏了就是 null，不抛）
   - `One_unreadable_key_does_not_fail_the_whole_list`（某子键读取时抛出的情况用接口外的方式造不出时，至少覆盖"值类型不对"：`DisplayName` 写成 DWORD → 该条被跳过）。
 
-- [ ] **Step 2: 运行测试确认失败。** Run: `dotnet test tests/PowerTools.Modules.Uninstaller.Tests`　Expected: 编译失败/FAIL，原因是 `Win32AppCatalog` 不存在。
+- [ ] **Step 2: 运行测试确认失败。** Run: `dotnet test tests/TidyBox.Modules.Uninstaller.Tests`　Expected: 编译失败/FAIL，原因是 `Win32AppCatalog` 不存在。
 
-- [ ] **Step 3: 实现** `Win32AppCatalog.LoadAll()`（`PowerTools.Modules.Uninstaller.Catalog`）：遍历三个根的 `SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`，按"已知的真实情况"里的规则过滤，Steam 识别用正则 `steam://uninstall/(\d+)\s*$`；每个子键用 try/catch 隔离。结果按 `DisplayName` 不区分大小写排序。
+- [ ] **Step 3: 实现** `Win32AppCatalog.LoadAll()`（`TidyBox.Modules.Uninstaller.Catalog`）：遍历三个根的 `SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall`，按"已知的真实情况"里的规则过滤，Steam 识别用正则 `steam://uninstall/(\d+)\s*$`；每个子键用 try/catch 隔离。结果按 `DisplayName` 不区分大小写排序。
 
 - [ ] **Step 4: 运行测试确认通过。** Expected: PASS。
 
@@ -132,7 +132,7 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
 
 **Files:**
 - Create: `Catalog/IStorePackageSource.cs`, `Catalog/StoreAppCatalog.cs`, `Routing/UninstallCommandParser.cs`, `Routing/UninstallRouter.cs`
-- Test: `tests/PowerTools.Modules.Uninstaller.Tests/Catalog/StoreAppCatalogTests.cs`, `Routing/UninstallCommandParserTests.cs`, `Routing/UninstallRouterTests.cs`
+- Test: `tests/TidyBox.Modules.Uninstaller.Tests/Catalog/StoreAppCatalogTests.cs`, `Routing/UninstallCommandParserTests.cs`, `Routing/UninstallRouterTests.cs`
 
 **Interfaces:**
 - Consumes: `InstalledApp`, `AppSource`（Task 2）
@@ -148,7 +148,7 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
   - `UninstallCommandParserTests`：带引号路径+参数；不带引号的 `C:\a\b.exe /S`；带空格但不带引号的路径（`C:\Program Files\X\u.exe /S`，要逐段尝试找到真实存在的 exe——测试里用临时文件造）；`MsiExec.exe /I{GUID}` → 参数变 `/X{GUID}`，`/X{GUID}` 保持不变；空串/纯空白 → `null`；
   - `UninstallRouterTests`（假的 runner/store/urls）：Steam → `urls.Open` 收到 `steam://uninstall/220`，不调 runner；`SteamAppId` 非纯数字 → `NotAvailable` 且什么都没启动；Win32 退出码 0 → `Completed`；退出码非 0 → `Failed` 且带退出码；runner 抛 `Win32Exception`（用户在 UAC 里取消，错误码 1223）→ `Failed`，消息说明"已取消"；`UninstallString` 为 null/解析失败 → `NotAvailable`；Win32 的命令是 `MsiExec` 或 `Update.exe`（启动后立刻转交子进程）→ 即使退出码为 0 也返回 `MaybeStillRunning`；Store → `store.RemoveAsync` 收到包全名，抛异常 → `Failed`。
 
-- [ ] **Step 2: 运行测试确认失败。** Run: `dotnet test tests/PowerTools.Modules.Uninstaller.Tests --filter "FullyQualifiedName~Store|FullyQualifiedName~Routing"`　Expected: FAIL，类型不存在。
+- [ ] **Step 2: 运行测试确认失败。** Run: `dotnet test tests/TidyBox.Modules.Uninstaller.Tests --filter "FullyQualifiedName~Store|FullyQualifiedName~Routing"`　Expected: FAIL，类型不存在。
 
 - [ ] **Step 3: 实现** 上述类型。`UninstallRouter` 对 Win32 用 `Process` 启动并等退出；`MaybeStillRunning` 的判定规则是"可执行文件名是 `msiexec.exe` 或 `update.exe`"，其余按退出码。Store 的真实 `IStoreRemover` 按 Task 1 的结论实现（`PackageManager.RemovePackageAsync` / PowerShell / 只打开设置页）。Steam 的 URL 校验照 `SteamUninstallLauncher.BuildUri` 的做法自己写一份（只接受纯数字 appid），不引用磁盘分析模块。
 
@@ -164,7 +164,7 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
 
 **Files:**
 - Create: `Residue/ResidueItem.cs`, `Residue/ResidueRoots.cs`, `Residue/ResidueScanner.cs`
-- Test: `tests/PowerTools.Modules.Uninstaller.Tests/Residue/ResidueScannerTests.cs`
+- Test: `tests/TidyBox.Modules.Uninstaller.Tests/Residue/ResidueScannerTests.cs`
 
 **Interfaces:**
 - Consumes: `InstalledApp`（Task 2）
@@ -183,7 +183,7 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
   - `Folder_shared_with_another_installed_app_is_not_residue`：发布者目录（如 `…\Contoso`）下还有别的子目录属于另一个仍装着的应用时，只考虑本应用自己的子目录，不报整个发布者目录。
   - `Registry_residue_is_reported_but_never_removable`；`Folder_residue_under_program_files_needs_elevation_and_under_appdata_does_not`
 
-- [ ] **Step 2: 运行测试确认失败。** Run: `dotnet test tests/PowerTools.Modules.Uninstaller.Tests --filter FullyQualifiedName~ResidueScanner`　Expected: FAIL，类型不存在。
+- [ ] **Step 2: 运行测试确认失败。** Run: `dotnet test tests/TidyBox.Modules.Uninstaller.Tests --filter FullyQualifiedName~ResidueScanner`　Expected: FAIL，类型不存在。
 
 - [ ] **Step 3: 实现** `Capture`/`FindLeftovers`。匹配规则：把 `DisplayName`、`Publisher` 拆成小写分词，去掉版本号和通用词；候选名需包含**整个应用名**（归一化后）才算 Medium，避免只因发布者相同就命中；`InstallLocation` 做前缀判断（规范化路径、不区分大小写、以目录分隔符结尾比较，防止 `C:\Apps\Foo` 匹配到 `C:\Apps\FooBar`）。
 
@@ -199,10 +199,10 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
 
 **Files:**
 - Create: `Residue/IRecycleBin.cs`, `Residue/ResidueRemover.cs`
-- Test: `tests/PowerTools.Modules.Uninstaller.Tests/Residue/ResidueRemoverTests.cs`
+- Test: `tests/TidyBox.Modules.Uninstaller.Tests/Residue/ResidueRemoverTests.cs`
 
 **Interfaces:**
-- Consumes: `ResidueItem`, `ResidueKind`, `ResidueRoots`（Task 4）, `PowerTools.Core.Elevation.IElevationClient`
+- Consumes: `ResidueItem`, `ResidueKind`, `ResidueRoots`（Task 4）, `TidyBox.Core.Elevation.IElevationClient`
 - Produces: `interface IRecycleBin { void Delete(string path); }`（真实实现用 `Microsoft.VisualBasic.FileIO.FileSystem.DeleteDirectory(path, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin)`）。
 - Produces: `record RemovalResult(ResidueItem Item, bool Success, string? Error)`；`class ResidueRemover { ResidueRemover(IRecycleBin recycleBin, IElevationClient elevation, ResidueRoots roots); Task<IReadOnlyList<RemovalResult>> RemoveAsync(IReadOnlyList<ResidueItem> items, CancellationToken ct = default); }`
 
@@ -228,9 +228,9 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
 帮手以管理员权限运行，管道虽然只允许我们的用户连接，但**帮手不能无条件信任请求内容**。只处理文件夹。
 
 **Files:**
-- Create: `src/PowerTools.ElevatedHelper/RemoveResidualHandler.cs`
-- Modify: `src/PowerTools.ElevatedHelper/Program.cs`（把 handler 加入 `handlers` 数组，替换"还没有真实 handler"那行注释）
-- Test: `tests/PowerTools.ElevatedHelper.Tests/RemoveResidualHandlerTests.cs`
+- Create: `src/TidyBox.ElevatedHelper/RemoveResidualHandler.cs`
+- Modify: `src/TidyBox.ElevatedHelper/Program.cs`（把 handler 加入 `handlers` 数组，替换"还没有真实 handler"那行注释）
+- Test: `tests/TidyBox.ElevatedHelper.Tests/RemoveResidualHandlerTests.cs`
 
 **Interfaces:**
 - Consumes: `IElevatedOperationHandler`（`OperationType`、`Task<ElevationResponse> HandleAsync(string payloadJson)`）, `ElevationResponse`
@@ -242,14 +242,14 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
   - `Rejects_path_traversal`（`…\Program Files\Foo\..\..\Windows`）
   - `Rejects_the_roots_themselves_and_protected_vendor_folders`
   - `Rejects_junction_that_escapes_the_allowed_root`（临时目录里用 `mklink /J` 造联接点指向白名单外）
-  - `Allowed_folder_is_moved_to_quarantine_not_deleted`：处理后原路径不存在、隔离目录 `%ProgramData%\PowerTools\Quarantine\<时间戳>\` 里有该文件夹（帮手不用回收站，对提权进程它按管理员用户算，用户找不到）。
+  - `Allowed_folder_is_moved_to_quarantine_not_deleted`：处理后原路径不存在、隔离目录 `%ProgramData%\TidyBox\Quarantine\<时间戳>\` 里有该文件夹（帮手不用回收站，对提权进程它按管理员用户算，用户找不到）。
   - `Mixed_request_reports_per_item_results`：一个被拒绝、一个成功，整体 `Success` 为 false，`ResultJson` 逐项说明。
 
-- [ ] **Step 2: 运行测试确认失败。** Run: `dotnet test tests/PowerTools.ElevatedHelper.Tests`　Expected: FAIL，`RemoveResidualHandler` 不存在。
+- [ ] **Step 2: 运行测试确认失败。** Run: `dotnet test tests/TidyBox.ElevatedHelper.Tests`　Expected: FAIL，`RemoveResidualHandler` 不存在。
 
 - [ ] **Step 3: 实现** `RemoveResidualHandler` 并在 `Program.cs` 注册。移动失败（跨卷等）则放弃该项并报告原因，**不**回退成直接删除。
 
-- [ ] **Step 4: 运行测试确认通过**，并运行 `dotnet test tests/PowerTools.ElevatedHelper.Tests` 全部（原有 8 个仍应通过）。Expected: PASS。
+- [ ] **Step 4: 运行测试确认通过**，并运行 `dotnet test tests/TidyBox.ElevatedHelper.Tests` 全部（原有 8 个仍应通过）。Expected: PASS。
 
 - [ ] **Step 5: Commit** `feat: add elevated folder quarantine with an allowlist`
 
@@ -258,10 +258,10 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
 ## Task 7: 模块工作流与界面
 
 **Files:**
-- Create: `src/PowerTools.Modules.Uninstaller/UninstallerModule.cs`
-- Create: `src/PowerTools.App/Views/UninstallerView.xaml`, `UninstallerView.xaml.cs`, `Views/UninstallRow.cs`（沿用 `MenuRow` 的做法：行对象在 App 里，逻辑在模块里）
-- Modify: `src/PowerTools.App/App.xaml.cs`（`Modules.Register(new UninstallerModule(...))`）, `src/PowerTools.App/MainWindow.xaml.cs`（`Pages["uninstaller"] = typeof(UninstallerView)`）, `src/PowerTools.App/PowerTools.App.csproj`（项目引用）
-- Test: `tests/PowerTools.Modules.Uninstaller.Tests/UninstallerModuleTests.cs`
+- Create: `src/TidyBox.Modules.Uninstaller/UninstallerModule.cs`
+- Create: `src/TidyBox.App/Views/UninstallerView.xaml`, `UninstallerView.xaml.cs`, `Views/UninstallRow.cs`（沿用 `MenuRow` 的做法：行对象在 App 里，逻辑在模块里）
+- Modify: `src/TidyBox.App/App.xaml.cs`（`Modules.Register(new UninstallerModule(...))`）, `src/TidyBox.App/MainWindow.xaml.cs`（`Pages["uninstaller"] = typeof(UninstallerView)`）, `src/TidyBox.App/TidyBox.App.csproj`（项目引用）
+- Test: `tests/TidyBox.Modules.Uninstaller.Tests/UninstallerModuleTests.cs`
 
 **Interfaces:**
 - Consumes: 上述全部。
@@ -277,9 +277,9 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
 
 - [ ] **Step 2: 运行测试确认失败。** Expected: FAIL，`UninstallerModule` 不存在。
 
-- [ ] **Step 3: 实现** `UninstallerModule`：`UninstallAsync` 先 `Capture`（仅 Win32），调用路由，`Completed` 才 `FindLeftovers`。界面：顶部搜索框 + 来源筛选（全部/Win32/商店/Steam）+ 列表（名称、发布者、版本、大小、来源）；选中后"卸载"按钮 → `ContentDialog` 二次确认；卸载完成后若有残留，弹出分组审核面板（按 文件夹 / 注册表 分组，高置信度文件夹默认勾选、中置信度默认不勾选，需要管理员的项旁标注"需要管理员权限"；注册表项灰显、不可勾选，旁注"无法在此删除，请手动处理"），"删除选中项"调用 `RemoveResidueAsync`，完成后提示"已移到回收站（或隔离目录 %ProgramData%PowerToolsQuarantine）"。列表控件沿用 `ListView`，不要给 `ScrollViewer` 加会拦截滚轮的包装（上一轮刚修过滚轮问题）。
+- [ ] **Step 3: 实现** `UninstallerModule`：`UninstallAsync` 先 `Capture`（仅 Win32），调用路由，`Completed` 才 `FindLeftovers`。界面：顶部搜索框 + 来源筛选（全部/Win32/商店/Steam）+ 列表（名称、发布者、版本、大小、来源）；选中后"卸载"按钮 → `ContentDialog` 二次确认；卸载完成后若有残留，弹出分组审核面板（按 文件夹 / 注册表 分组，高置信度文件夹默认勾选、中置信度默认不勾选，需要管理员的项旁标注"需要管理员权限"；注册表项灰显、不可勾选，旁注"无法在此删除，请手动处理"），"删除选中项"调用 `RemoveResidueAsync`，完成后提示"已移到回收站（或隔离目录 %ProgramData%TidyBoxQuarantine）"。列表控件沿用 `ListView`，不要给 `ScrollViewer` 加会拦截滚轮的包装（上一轮刚修过滚轮问题）。
 
-- [ ] **Step 4: 运行测试确认通过，再跑全部测试。** Run: `dotnet test tests/PowerTools.Core.Tests; dotnet test tests/PowerTools.ElevatedHelper.Tests; dotnet test tests/PowerTools.Modules.ContextMenu.Tests; dotnet test tests/PowerTools.Modules.DiskAnalyzer.Tests; dotnet test tests/PowerTools.Modules.Uninstaller.Tests`　Expected: 全部 PASS（不要直接对 `.sln` 跑，里面有用户的 `App1`）。再 `dotnet build src/PowerTools.App -p:Platform=x86` 确认能编译。
+- [ ] **Step 4: 运行测试确认通过，再跑全部测试。** Run: `dotnet test tests/TidyBox.Core.Tests; dotnet test tests/TidyBox.ElevatedHelper.Tests; dotnet test tests/TidyBox.Modules.ContextMenu.Tests; dotnet test tests/TidyBox.Modules.DiskAnalyzer.Tests; dotnet test tests/TidyBox.Modules.Uninstaller.Tests`　Expected: 全部 PASS（不要直接对 `.sln` 跑，里面有用户的 `App1`）。再 `dotnet build src/TidyBox.App -p:Platform=x86` 确认能编译。
 
 - [ ] **Step 5: Commit** `feat: add uninstaller module view and wire it into the shell`
 
@@ -291,6 +291,6 @@ docs/superpowers/specs/2026-10-25-uninstaller-mechanism-spike.md   Task 1 的结
 
 - [ ] **Step 1:** 部署后（单项目 MSIX 的松散部署不会随 `dotnet build` 刷新，需要先停掉 App，再把构建输出 `robocopy` 进 `bin\<plat>\Debug\…\AppX`）核对列表：与"设置 → 应用 → 已安装的应用"比对数量与名称，记录差异（预期：我们过滤掉更新补丁与系统组件）。
 - [ ] **Step 2:** 卸载一个无害的 Win32 程序（先装一个小工具，如 7-Zip 便携以外的安装版），确认：UAC 由卸载程序自己弹出、取消后界面显示"已取消"、完成后出现残留面板、勾选 `AppData` 下的文件夹删除后出现在回收站里。
-- [ ] **Step 3:** 对一个需要提权的残留（`Program Files` 下遗留目录）执行删除，确认出现一次 UAC、目录出现在 `%ProgramData%\PowerTools\Quarantine`。
+- [ ] **Step 3:** 对一个需要提权的残留（`Program Files` 下遗留目录）执行删除，确认出现一次 UAC、目录出现在 `%ProgramData%\TidyBox\Quarantine`。
 - [ ] **Step 4:** 卸载一个 Steam 游戏（只确认 Steam 弹出卸载确认框）与一个 Store 应用（按 Task 1 选定的机制）。
 - [ ] **Step 5:** 记录未覆盖的问题，提交文档。

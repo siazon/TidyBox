@@ -4,7 +4,7 @@
 
 **Goal:** 实现右键菜单管理作为一个 `IToolModule`：列出文件/文件夹/文件夹空白处/驱动器右键菜单里由注册表登记的条目，对每一条做**可恢复的**启用/禁用，并提供"一键恢复经典右键菜单"开关。
 
-**Architecture:** 新增 `PowerTools.Modules.ContextMenu` 类库（纯逻辑，依赖 `PowerTools.Core`）。注册表访问集中在一个可注入根键的 `ContextMenuRegistryRoots` 后面，测试在 `HKCU` 下的沙箱键里跑，不碰真实系统。禁用**只加值、不删键**：处理程序（`shellex\ContextMenuHandlers`）用每用户的 `Shell Extensions\Blocked` 列表，静态动词（`shell\<verb>`）用 `LegacyDisable` 值，全部写 `HKCU`，所以日常使用不需要管理员权限，也不依赖提权帮手。界面放进 `PowerTools.App`，沿用磁盘分析模块的做法（模块纯逻辑，页面只做绑定）。
+**Architecture:** 新增 `TidyBox.Modules.ContextMenu` 类库（纯逻辑，依赖 `TidyBox.Core`）。注册表访问集中在一个可注入根键的 `ContextMenuRegistryRoots` 后面，测试在 `HKCU` 下的沙箱键里跑，不碰真实系统。禁用**只加值、不删键**：处理程序（`shellex\ContextMenuHandlers`）用每用户的 `Shell Extensions\Blocked` 列表，静态动词（`shell\<verb>`）用 `LegacyDisable` 值，全部写 `HKCU`，所以日常使用不需要管理员权限，也不依赖提权帮手。界面放进 `TidyBox.App`，沿用磁盘分析模块的做法（模块纯逻辑，页面只做绑定）。
 
 **Tech Stack:** .NET 8（`net8.0-windows`）, xUnit, `Microsoft.Win32.Registry`, `SHLoadIndirectString`（P/Invoke）, WinUI3。
 
@@ -41,8 +41,8 @@
 ## File Structure
 
 ```
-src/PowerTools.Modules.ContextMenu/
-  PowerTools.Modules.ContextMenu.csproj
+src/TidyBox.Modules.ContextMenu/
+  TidyBox.Modules.ContextMenu.csproj
   Model/MenuLocation.cs            枚举 + 位置到注册表路径、中文名的映射
   Model/MenuEntry.cs               MenuEntry / MenuEntryKind / MenuEntryState
   Registry/ContextMenuRegistryRoots.cs   可注入的 HKLM/HKCU 根；固定的相对路径常量
@@ -54,10 +54,10 @@ src/PowerTools.Modules.ContextMenu/
   Classic/ClassicMenuSwitch.cs     经典菜单开关
   Classic/IExplorerRestarter.cs    接口 + 真实实现（重启资源管理器）
   ContextMenuModule.cs             IToolModule + 对界面暴露的工作流
-tests/PowerTools.Modules.ContextMenu.Tests/
-  Support/RegistrySandbox.cs       在 HKCU\Software\PowerToolsTests\<guid> 下造假的 HKLM/HKCU 根，Dispose 时清理
+tests/TidyBox.Modules.ContextMenu.Tests/
+  Support/RegistrySandbox.cs       在 HKCU\Software\TidyBoxTests\<guid> 下造假的 HKLM/HKCU 根，Dispose 时清理
   ... 与上面一一对应的测试文件
-src/PowerTools.App/Views/ContextMenuView.xaml(.cs)   界面
+src/TidyBox.App/Views/ContextMenuView.xaml(.cs)   界面
 docs/superpowers/specs/2026-10-25-context-menu-mechanism-spike.md   Task 1 的结论记录
 ```
 
@@ -95,10 +95,10 @@ docs/superpowers/specs/2026-10-25-context-menu-mechanism-spike.md   Task 1 的�
 ## Task 2: 项目骨架、数据模型、注册表沙箱
 
 **Files:**
-- Create: `src/PowerTools.Modules.ContextMenu/PowerTools.Modules.ContextMenu.csproj`（`net8.0-windows`，引用 `PowerTools.Core`，`InternalsVisibleTo` 测试项目）
-- Create: `src/PowerTools.Modules.ContextMenu/Model/MenuLocation.cs`、`Model/MenuEntry.cs`、`Registry/ContextMenuRegistryRoots.cs`
-- Create: `tests/PowerTools.Modules.ContextMenu.Tests/PowerTools.Modules.ContextMenu.Tests.csproj`、`Support/RegistrySandbox.cs`、`Registry/ContextMenuRegistryRootsTests.cs`
-- Modify: `PowerTools.sln`
+- Create: `src/TidyBox.Modules.ContextMenu/TidyBox.Modules.ContextMenu.csproj`（`net8.0-windows`，引用 `TidyBox.Core`，`InternalsVisibleTo` 测试项目）
+- Create: `src/TidyBox.Modules.ContextMenu/Model/MenuLocation.cs`、`Model/MenuEntry.cs`、`Registry/ContextMenuRegistryRoots.cs`
+- Create: `tests/TidyBox.Modules.ContextMenu.Tests/TidyBox.Modules.ContextMenu.Tests.csproj`、`Support/RegistrySandbox.cs`、`Registry/ContextMenuRegistryRootsTests.cs`
+- Modify: `TidyBox.sln`
 
 **Interfaces:**
 - Produces:
@@ -106,11 +106,11 @@ docs/superpowers/specs/2026-10-25-context-menu-mechanism-spike.md   Task 1 的�
   - `enum MenuEntryKind { Handler, Verb }`；`enum MenuEntryState { Enabled, Disabled, DisabledBySystem }`（`Disabled` = 我们或用户在 `HKCU` 禁用，可恢复；`DisabledBySystem` = 只在 `HKLM` 层被禁用，这里不能改）。
   - `record MenuEntry(string Id, MenuLocation Location, MenuEntryKind Kind, string KeyName, string DisplayName, string? Publisher, string? ModulePath, string? Clsid, bool InMachineHive, bool InUserHive, MenuEntryState State, string? Problem)`；`Id` 恒为 `$"{Location}|{Kind}|{KeyName}"`，`KeyName` **原样保留**（含前导空格）。`Problem` 非空表示这条无法识别或有问题，界面据此只读显示。
   - `sealed class ContextMenuRegistryRoots(RegistryKey machine, RegistryKey user)`：`Machine`/`User` 属性；常量 `ClassesPath = @"Software\Classes"`、`BlockedPath = @"Software\Microsoft\Windows\CurrentVersion\Shell Extensions\Blocked"`；静态 `Real()` 返回 `(Registry.LocalMachine, Registry.CurrentUser)`。
-  - 测试辅助 `RegistrySandbox : IDisposable`：在 `HKCU\Software\PowerToolsTests\<guid>` 下建 `machine` 和 `user` 两个子键，`Roots` 属性返回对应的 `ContextMenuRegistryRoots`，提供 `AddHandler(hive, location, keyName, defaultValue)`、`AddVerb(hive, location, verbName, params (string Name, object Value)[] values)`、`RegisterClsid(hive, clsid, name, dllPath)`、`Block(hive, clsid)` 辅助方法；`Dispose` 删除整个沙箱。
+  - 测试辅助 `RegistrySandbox : IDisposable`：在 `HKCU\Software\TidyBoxTests\<guid>` 下建 `machine` 和 `user` 两个子键，`Roots` 属性返回对应的 `ContextMenuRegistryRoots`，提供 `AddHandler(hive, location, keyName, defaultValue)`、`AddVerb(hive, location, verbName, params (string Name, object Value)[] values)`、`RegisterClsid(hive, clsid, name, dllPath)`、`Block(hive, clsid)` 辅助方法；`Dispose` 删除整个沙箱。
 
-- [ ] **Step 1: 建两个项目并加入解决方案**（`dotnet new` 之后把 TFM 改成 `net8.0-windows`，测试项目照 `PowerTools.Core.Tests` 的 csproj 写）。
-- [ ] **Step 2: 写失败的测试** `ContextMenuRegistryRootsTests`：`MenuLocation` 的 `RegistryKeyName`/`DisplayName` 对照上表；`RegistrySandbox` 创建后两个根互相独立，`Dispose` 后 `HKCU\Software\PowerToolsTests\<guid>` 不再存在；`Real()` 的两个根分别是 `Registry.LocalMachine` 和 `Registry.CurrentUser`。
-- [ ] **Step 3: 运行，确认失败**：`dotnet test tests/PowerTools.Modules.ContextMenu.Tests`
+- [ ] **Step 1: 建两个项目并加入解决方案**（`dotnet new` 之后把 TFM 改成 `net8.0-windows`，测试项目照 `TidyBox.Core.Tests` 的 csproj 写）。
+- [ ] **Step 2: 写失败的测试** `ContextMenuRegistryRootsTests`：`MenuLocation` 的 `RegistryKeyName`/`DisplayName` 对照上表；`RegistrySandbox` 创建后两个根互相独立，`Dispose` 后 `HKCU\Software\TidyBoxTests\<guid>` 不再存在；`Real()` 的两个根分别是 `Registry.LocalMachine` 和 `Registry.CurrentUser`。
+- [ ] **Step 3: 运行，确认失败**：`dotnet test tests/TidyBox.Modules.ContextMenu.Tests`
 - [ ] **Step 4: 实现上述类型。**
 - [ ] **Step 5: 运行，确认通过，提交** `feat: scaffold context menu module with registry roots and sandbox`
 
@@ -119,9 +119,9 @@ docs/superpowers/specs/2026-10-25-context-menu-mechanism-spike.md   Task 1 的�
 ## Task 3: 目录扫描 `ContextMenuCatalog`
 
 **Files:**
-- Create: `src/PowerTools.Modules.ContextMenu/Catalog/ContextMenuCatalog.cs`
-- Create: `src/PowerTools.Modules.ContextMenu/Naming/IMenuNameResolver.cs`（本任务先只建接口和 `MenuNameInfo` 记录，签名见 Task 4；Task 4 再提供真实实现）
-- Test: `tests/PowerTools.Modules.ContextMenu.Tests/Catalog/ContextMenuCatalogTests.cs`
+- Create: `src/TidyBox.Modules.ContextMenu/Catalog/ContextMenuCatalog.cs`
+- Create: `src/TidyBox.Modules.ContextMenu/Naming/IMenuNameResolver.cs`（本任务先只建接口和 `MenuNameInfo` 记录，签名见 Task 4；Task 4 再提供真实实现）
+- Test: `tests/TidyBox.Modules.ContextMenu.Tests/Catalog/ContextMenuCatalogTests.cs`
 
 **Interfaces:**
 - Consumes: `ContextMenuRegistryRoots`、`MenuEntry`（Task 2）；`IMenuNameResolver`（本任务创建，测试里用假实现，返回 `DisplayName = keyName`）。
@@ -154,8 +154,8 @@ docs/superpowers/specs/2026-10-25-context-menu-mechanism-spike.md   Task 1 的�
 ## Task 4: 名称解析 `MenuNameResolver`
 
 **Files:**
-- Create: `src/PowerTools.Modules.ContextMenu/Naming/MenuNameResolver.cs`、`IndirectStringLoader.cs`
-- Test: `tests/PowerTools.Modules.ContextMenu.Tests/Naming/MenuNameResolverTests.cs`
+- Create: `src/TidyBox.Modules.ContextMenu/Naming/MenuNameResolver.cs`、`IndirectStringLoader.cs`
+- Test: `tests/TidyBox.Modules.ContextMenu.Tests/Naming/MenuNameResolverTests.cs`
 
 **Interfaces:**
 - Consumes: `IMenuNameResolver`、`MenuNameInfo`（Task 3 已创建；签名如下，不要改动）。
@@ -184,8 +184,8 @@ docs/superpowers/specs/2026-10-25-context-menu-mechanism-spike.md   Task 1 的�
 ## Task 5: 启用/禁用 `MenuToggler`
 
 **Files:**
-- Create: `src/PowerTools.Modules.ContextMenu/Toggle/MenuToggler.cs`
-- Test: `tests/PowerTools.Modules.ContextMenu.Tests/Toggle/MenuTogglerTests.cs`
+- Create: `src/TidyBox.Modules.ContextMenu/Toggle/MenuToggler.cs`
+- Test: `tests/TidyBox.Modules.ContextMenu.Tests/Toggle/MenuTogglerTests.cs`
 
 **Interfaces:**
 - Consumes: `ContextMenuRegistryRoots`、`MenuEntry`（Task 2）。
@@ -220,8 +220,8 @@ docs/superpowers/specs/2026-10-25-context-menu-mechanism-spike.md   Task 1 的�
 ## Task 6: 经典菜单开关与重启资源管理器
 
 **Files:**
-- Create: `src/PowerTools.Modules.ContextMenu/Classic/ClassicMenuSwitch.cs`、`IExplorerRestarter.cs`
-- Test: `tests/PowerTools.Modules.ContextMenu.Tests/Classic/ClassicMenuSwitchTests.cs`
+- Create: `src/TidyBox.Modules.ContextMenu/Classic/ClassicMenuSwitch.cs`、`IExplorerRestarter.cs`
+- Test: `tests/TidyBox.Modules.ContextMenu.Tests/Classic/ClassicMenuSwitchTests.cs`
 
 **Interfaces:**
 - Consumes: `ContextMenuRegistryRoots`（Task 2）、`ToggleResult`（Task 5）。
@@ -243,8 +243,8 @@ docs/superpowers/specs/2026-10-25-context-menu-mechanism-spike.md   Task 1 的�
 ## Task 7: `ContextMenuModule`
 
 **Files:**
-- Create: `src/PowerTools.Modules.ContextMenu/ContextMenuModule.cs`
-- Test: `tests/PowerTools.Modules.ContextMenu.Tests/ContextMenuModuleTests.cs`
+- Create: `src/TidyBox.Modules.ContextMenu/ContextMenuModule.cs`
+- Test: `tests/TidyBox.Modules.ContextMenu.Tests/ContextMenuModuleTests.cs`
 
 **Interfaces:**
 - Consumes: `ContextMenuCatalog`、`MenuToggler`、`ClassicMenuSwitch`（Task 3、5、6），`MenuNameResolver`（Task 4），`IExplorerRestarter`。
@@ -270,8 +270,8 @@ docs/superpowers/specs/2026-10-25-context-menu-mechanism-spike.md   Task 1 的�
 ## Task 8: WinUI3 视图并接入外壳
 
 **Files:**
-- Create: `src/PowerTools.App/Views/ContextMenuView.xaml`、`ContextMenuView.xaml.cs`
-- Modify: `src/PowerTools.App/PowerTools.App.csproj`（引用新项目）、`src/PowerTools.App/App.xaml.cs`（注册 `ContextMenuModule`）、`src/PowerTools.App/MainWindow.xaml.cs`（`Pages["context-menu"] = typeof(ContextMenuView)`）
+- Create: `src/TidyBox.App/Views/ContextMenuView.xaml`、`ContextMenuView.xaml.cs`
+- Modify: `src/TidyBox.App/TidyBox.App.csproj`（引用新项目）、`src/TidyBox.App/App.xaml.cs`（注册 `ContextMenuModule`）、`src/TidyBox.App/MainWindow.xaml.cs`（`Pages["context-menu"] = typeof(ContextMenuView)`）
 
 **Interfaces:**
 - Consumes: `ContextMenuModule`（Task 7）。页面通过 `Frame.Navigate(typeof(ContextMenuView), module)` 拿到模块实例，约定同 `DiskAnalyzerView`。
@@ -284,7 +284,7 @@ docs/superpowers/specs/2026-10-25-context-menu-mechanism-spike.md   Task 1 的�
 - 沿用磁盘分析页的无障碍约定：列表项行对象重写 `ToString`。
 
 - [ ] **Step 1: 引用项目、注册模块、加页面映射，写页面。**
-- [ ] **Step 2: `dotnet build src/PowerTools.App -p:Platform=x64`，Expected: 成功，0 警告。**
+- [ ] **Step 2: `dotnet build src/TidyBox.App -p:Platform=x64`，Expected: 成功，0 警告。**
 - [ ] **Step 3: 自动化冒烟：** 用 UI Automation 启动打包后的 App（做法同磁盘分析页的验证：临时替换已安装的开发包并在 `finally` 里还原），确认导航里出现"右键菜单管理"、页面加载出条目、搜索框能过滤；截取应用窗口检查布局。
 - [ ] **Step 4: 手动验证（需要人）：** 禁用一个条目后右键，确认菜单里没了，再启用确认回来；切换经典菜单并点"重启资源管理器"，确认右键直接出现完整菜单。结果与 Task 1 的结论对照，不一致就回到 Task 1 修正文档和实现。
 - [ ] **Step 5: 提交** `feat: add context menu management view and wire it into the shell`
