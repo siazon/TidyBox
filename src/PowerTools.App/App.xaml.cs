@@ -138,12 +138,15 @@ public partial class App : Application
         RestoreVocabStrip();
     }
 
-    // Brings the strip back if it was showing when the app last ran. A word list that has gone missing is left as saved:
-    // nothing is shown this time, and the Vocab page says why when it is opened.
+    // Loads the saved word list, or the bundled one until the user picks another, and brings the strip back if it was
+    // showing when the app last ran. A word list that has gone missing is left as saved: nothing is shown this time,
+    // and the Vocab page says why when it is opened.
     private static void RestoreVocabStrip()
     {
-        if (!VocabSettings.Enabled || VocabSettings.Path is not { Length: > 0 } path) return;
+        var path = VocabSettings.Path is { Length: > 0 } saved
+            ? saved
+            : Path.Combine(AppContext.BaseDirectory, "Assets", "Vocab", "NGSL_1.2.json");
 
-        if (Vocab.Load(path) && Vocab.Start() && !VocabStrip.Show()) Vocab.Stop();
+        if (Vocab.Load(path) && VocabSettings.Enabled && Vocab.Start() && !VocabStrip.Show()) Vocab.Stop();
     }
 }
