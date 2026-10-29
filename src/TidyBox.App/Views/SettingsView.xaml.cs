@@ -249,7 +249,12 @@ public sealed partial class SettingsView : Page
             _ => ElementTheme.Default,
         };
 
-        if (App.CurrentWindow?.Content is FrameworkElement root) root.RequestedTheme = theme;
+        if (App.CurrentWindow is { Content: FrameworkElement root } window)
+        {
+            root.RequestedTheme = theme;
+            TitleBarTheme.Apply(window, theme);
+        }
+
         ApplicationData.Current.LocalSettings.Values["Theme"] = tag;
     }
 
