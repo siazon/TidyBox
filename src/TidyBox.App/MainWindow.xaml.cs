@@ -15,6 +15,7 @@ public sealed partial class MainWindow : Window
         ["disk-analyzer"] = typeof(DiskAnalyzerView),
         ["context-menu"] = typeof(ContextMenuView),
         ["uninstaller"] = typeof(UninstallerView),
+        ["downloads"] = typeof(DownloadsView),
         ["vocab"] = typeof(VocabView),
     };
 
@@ -24,6 +25,7 @@ public sealed partial class MainWindow : Window
         ["disk-analyzer"] = "\uEDA2", // HardDrive
         ["context-menu"] = "\uF2C7",  // BulletedList2
         ["uninstaller"] = "\uEC91",   // Uninstall
+        ["downloads"] = "\uE896",     // Download
         ["vocab"] = "\uE8F1",         // Library
     };
 

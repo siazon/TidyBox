@@ -5,6 +5,7 @@ using TidyBox.Core.Logging;
 using TidyBox.Core.Modules;
 using TidyBox.Modules.ContextMenu;
 using TidyBox.Modules.DiskAnalyzer;
+using TidyBox.Modules.Downloads;
 using TidyBox.Modules.Uninstaller;
 using TidyBox.Modules.Vocab;
 using TidyBox.App.TaskbarStrip;
@@ -43,6 +44,7 @@ public partial class App : Application
         // The icon sits in the install folder, which has the version in its name; the module repoints the menu after updates.
         Modules.Register(new ContextMenuModule(analyzeIcon: Path.Combine(AppContext.BaseDirectory, "Assets", "TidyBox.ico")));
         Modules.Register(new UninstallerModule());
+        Modules.Register(new DownloadsModule());
         Modules.Register(Vocab);
     }
 
