@@ -90,6 +90,47 @@
                 </StackPanel>
             </Border>
 
+            <TextBlock Text="文件整理" FontWeight="SemiBold" FontSize="16" />
+            <Border Padding="16,12" CornerRadius="6" BorderThickness="1"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                <StackPanel Spacing="16">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="多少天没动算“久未动”" FontWeight="SemiBold" />
+                            <TextBlock Text="文件的创建和修改时间都超过这么多天，就会出现在文件整理页的“久未动的”里（1 到 3650 天，默认 90 天）。"
+                                       TextWrapping="Wrap" Opacity="0.7" />
+                        </StackPanel>
+                        <NumberBox x:Name="StaleDaysBox" Grid.Column="1" VerticalAlignment="Top" Width="150"
+                                   Minimum="1" Maximum="3650" SmallChange="1" LargeChange="10"
+                                   SpinButtonPlacementMode="Inline" ValidationMode="InvalidInputOverwritten"
+                                   AutomationProperties.Name="久未动的天数" ValueChanged="OnTidyOptionChanged" />
+                    </Grid>
+
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="刚写入的文件先不动（分钟）" FontWeight="SemiBold" />
+                            <TextBlock Text="最近这么多分钟内被写入过的文件不会被整理，也不会被移到回收站，避免动到还没下载完的文件（0 到 1440 分钟，默认 5 分钟；0 表示不等待，正在被使用的文件仍会跳过）。"
+                                       TextWrapping="Wrap" Opacity="0.7" />
+                        </StackPanel>
+                        <NumberBox x:Name="RecentMinutesBox" Grid.Column="1" VerticalAlignment="Top" Width="150"
+                                   Minimum="0" Maximum="1440" SmallChange="1" LargeChange="10"
+                                   SpinButtonPlacementMode="Inline" ValidationMode="InvalidInputOverwritten"
+                                   AutomationProperties.Name="刚写入的等待分钟数" ValueChanged="OnTidyOptionChanged" />
+                    </Grid>
+
+                    <Button Content="恢复默认值" HorizontalAlignment="Left" Click="OnResetTidyOptionsClick" />
+                </StackPanel>
+            </Border>
+
             <TextBlock Text="外观" FontWeight="SemiBold" FontSize="16" />
             <Border Padding="16,12" CornerRadius="6" BorderThickness="1"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"

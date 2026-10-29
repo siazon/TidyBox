@@ -6,6 +6,7 @@ using TidyBox.App.Feedback;
 using TidyBox.Core.Feedback;
 using TidyBox.Core.Modules;
 using TidyBox.Modules.DiskAnalyzer;
+using TidyBox.Modules.Downloads;
 using TidyBox.Modules.Uninstaller;
 using Windows.Storage;
 
@@ -14,10 +15,44 @@ namespace TidyBox.App.Views;
 public sealed partial class SettingsView : Page
 {
     private UninstallerModule _uninstaller = null!;
+    private DownloadsModule _tidy = null!;
+    private bool _showingTidyOptions; // set while the page fills the boxes itself, so ValueChanged does not act on it
 
     public SettingsView()
     {
         InitializeComponent();
+    }
+
+    private void ShowTidyOptions()
+    {
+        _showingTidyOptions = true;
+        StaleDaysBox.Value = _tidy.Options.StaleDays;
+        RecentMinutesBox.Value = _tidy.Options.RecentMinutes;
+        _showingTidyOptions = false;
+    }
+
+    // Applied and saved as soon as a value changes; the next scan on the tidy page uses it. A box that is empty or mid-edit is ignored until it has a number.
+    private void OnTidyOptionChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    {
+        if (_showingTidyOptions || double.IsNaN(StaleDaysBox.Value) || double.IsNaN(RecentMinutesBox.Value)) return;
+
+        try
+        {
+            var options = TidyOptions.Create((int)StaleDaysBox.Value, (int)RecentMinutesBox.Value);
+            _tidy.SetOptions(options);
+            TidyOptionsSettings.Save(options);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            ShowTidyOptions(); // the boxes keep to the range; this is only a guard, and it puts back what is in force
+        }
+    }
+
+    private void OnResetTidyOptionsClick(object sender, RoutedEventArgs e)
+    {
+        _tidy.SetOptions(TidyOptions.Default);
+        TidyOptionsSettings.Save(TidyOptions.Default);
+        ShowTidyOptions();
     }
 
     private bool _feedbackDialogOpen;
@@ -45,6 +80,8 @@ public sealed partial class SettingsView : Page
     {
         var registry = (ModuleRegistry)e.Parameter;
         _uninstaller = (UninstallerModule)registry.GetById("uninstaller")!;
+        _tidy = (DownloadsModule)registry.GetById("downloads")!;
+        ShowTidyOptions();
 
         RegistryBackupPathText.Text = _uninstaller.RegistryBackupDirectory;
         VersionText.Text = $"TidyBox {AppVersionText()}";

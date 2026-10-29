@@ -4,6 +4,8 @@ namespace TidyBox.Modules.Downloads.Tests.Scanning;
 
 public class FileAgeTests
 {
+    private static readonly TimeSpan Stale = TidyOptions.Default.StaleAfter;
+
     private static readonly DateTime Now = new(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
 
     private static DownloadFile File(DateTime created, DateTime modified) => new(@"C:\d\a.zip", 1, created, modified, null);
@@ -19,14 +21,14 @@ public class FileAgeTests
     }
 
     [Fact]
-    public void IsStale_ExactlyNinetyDays_False() => Assert.False(FileAge.IsStale(File(Now - TimeSpan.FromDays(90), Now - TimeSpan.FromDays(90)), Now));
+    public void IsStale_ExactlyNinetyDays_False() => Assert.False(FileAge.IsStale(File(Now - TimeSpan.FromDays(90), Now - TimeSpan.FromDays(90)), Now, Stale));
 
     [Fact]
     public void IsStale_NinetyDaysAndOneSecond_True()
     {
         var old = Now - TimeSpan.FromDays(90) - TimeSpan.FromSeconds(1);
 
-        Assert.True(FileAge.IsStale(File(old, old), Now));
+        Assert.True(FileAge.IsStale(File(old, old), Now, Stale));
     }
 
     [Fact]

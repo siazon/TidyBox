@@ -8,6 +8,8 @@ namespace TidyBox.Modules.Downloads.Tests.Tidy;
 
 public class TidyExecutorTests : IDisposable
 {
+    private static readonly TimeSpan Window = TidyOptions.Default.RecentWindow;
+
     private static readonly DateTime Now = new(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
     private readonly string _base = Path.Combine(Path.GetTempPath(), "tb-downloads-" + Guid.NewGuid());
     private readonly string _root;
@@ -44,7 +46,7 @@ public class TidyExecutorTests : IDisposable
 
     private KeptStore Kept => new(Path.Combine(_store, "kept.json"));
 
-    private TidyExecutor NewExecutor() => new(_root, Journal, Kept, _recycler, () => Now);
+    private TidyExecutor NewExecutor() => new(_root, Journal, Kept, _recycler, () => Now, Window);
 
     private DownloadFile Source(string name, string content = "hello", string? directory = null)
     {
@@ -232,7 +234,7 @@ public class TidyExecutorTests : IDisposable
         var keptPath = Path.Combine(_store, "kept.json");
         File.Delete(keptPath);
         Directory.CreateDirectory(keptPath); // from here on, writing kept.json fails
-        var executor = new TidyExecutor(_root, Journal, kept, _recycler, () => Now);
+        var executor = new TidyExecutor(_root, Journal, kept, _recycler, () => Now, Window);
 
         var result = executor.Execute(new[] { Move(file) });
 

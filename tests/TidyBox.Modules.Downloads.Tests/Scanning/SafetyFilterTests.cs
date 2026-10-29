@@ -4,6 +4,8 @@ namespace TidyBox.Modules.Downloads.Tests.Scanning;
 
 public class SafetyFilterTests : IDisposable
 {
+    private static readonly TimeSpan Window = TidyOptions.Default.RecentWindow;
+
     private static readonly DateTime Now = new(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "tb-downloads-" + Guid.NewGuid());
 
@@ -20,7 +22,7 @@ public class SafetyFilterTests : IDisposable
     }
 
     [Fact]
-    public void OrdinaryFile_IsEligible() => Assert.True(SafetyFilter.IsEligible(Make("report.pdf"), Now));
+    public void OrdinaryFile_IsEligible() => Assert.True(SafetyFilter.IsEligible(Make("report.pdf"), Now, Window));
 
     [Theory]
     [InlineData("a.crdownload")]
@@ -30,16 +32,16 @@ public class SafetyFilterTests : IDisposable
     [InlineData("a.opdownload")]
     [InlineData("desktop.ini")]
     [InlineData("Thumbs.db")]
-    public void UnfinishedOrSystemFile_IsNotEligible(string name) => Assert.False(SafetyFilter.IsEligible(Make(name), Now));
+    public void UnfinishedOrSystemFile_IsNotEligible(string name) => Assert.False(SafetyFilter.IsEligible(Make(name), Now, Window));
 
     [Fact]
-    public void ZeroByteFile_IsNotEligible() => Assert.False(SafetyFilter.IsEligible(Make("empty.pdf", bytes: 0), Now));
+    public void ZeroByteFile_IsNotEligible() => Assert.False(SafetyFilter.IsEligible(Make("empty.pdf", bytes: 0), Now, Window));
 
     [Fact]
-    public void WrittenFourMinutesAgo_IsNotEligible() => Assert.False(SafetyFilter.IsEligible(Make("a.pdf", age: TimeSpan.FromMinutes(4)), Now));
+    public void WrittenFourMinutesAgo_IsNotEligible() => Assert.False(SafetyFilter.IsEligible(Make("a.pdf", age: TimeSpan.FromMinutes(4)), Now, Window));
 
     [Fact]
-    public void WrittenSixMinutesAgo_IsEligible() => Assert.True(SafetyFilter.IsEligible(Make("a.pdf", age: TimeSpan.FromMinutes(6)), Now));
+    public void WrittenSixMinutesAgo_IsEligible() => Assert.True(SafetyFilter.IsEligible(Make("a.pdf", age: TimeSpan.FromMinutes(6)), Now, Window));
 
     [Fact]
     public void FileOpenedWithShareNone_IsNotEligible()
@@ -47,7 +49,7 @@ public class SafetyFilterTests : IDisposable
         var file = Make("locked.pdf");
         using var held = new FileStream(file.FullName, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
 
-        Assert.False(SafetyFilter.IsEligible(file, Now));
+        Assert.False(SafetyFilter.IsEligible(file, Now, Window));
     }
 
     [Fact]
@@ -59,6 +61,6 @@ public class SafetyFilterTests : IDisposable
         // Symbolic links need developer mode or elevation; on a machine without either there is nothing to test.
         if (!TestLinks.TryCreateFileLink(link, target.FullName)) return;
 
-        Assert.False(SafetyFilter.IsEligible(new FileInfo(link), Now));
+        Assert.False(SafetyFilter.IsEligible(new FileInfo(link), Now, Window));
     }
 }

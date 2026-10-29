@@ -8,6 +8,8 @@ namespace TidyBox.Modules.Downloads.Tests.Tidy;
 
 public class TidyUndoTests : IDisposable
 {
+    private static readonly TimeSpan Window = TidyOptions.Default.RecentWindow;
+
     private static readonly DateTime Now = new(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
     private readonly string _base = Path.Combine(Path.GetTempPath(), "tb-downloads-" + Guid.NewGuid());
     private readonly string _root;
@@ -47,7 +49,7 @@ public class TidyUndoTests : IDisposable
     private Batch TidyAway(params DownloadFile[] files)
     {
         var proposals = files.Select(f => new Proposal(f, ProposalKind.Move, "documents", Dest(f.Name), "移动到「文档」", true, false)).ToList();
-        var executor = new TidyExecutor(_root, Journal, Kept, new NoRecycler(), () => Now);
+        var executor = new TidyExecutor(_root, Journal, Kept, new NoRecycler(), () => Now, Window);
         return executor.Execute(proposals).MoveBatch!;
     }
 

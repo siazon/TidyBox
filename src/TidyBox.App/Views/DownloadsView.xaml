@@ -106,7 +106,7 @@
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
                 <StackPanel Spacing="8">
                     <TextBlock x:Name="StaleTitle" FontWeight="SemiBold" />
-                    <TextBlock Text="超过 90 天没动的文件，默认一项都不勾选。移到回收站不会立刻释放空间，清空回收站后才真正释放（可在“磁盘空间分析”页清空）。选“保留，不再提醒”后，文件被修改或换了位置前不会再出现。"
+                    <TextBlock x:Name="StaleHint"
                                TextWrapping="Wrap" Opacity="0.7" />
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <ComboBox x:Name="TypeFilter" MinWidth="140" SelectionChanged="OnFilterChanged" AutomationProperties.Name="按类型筛选" />
