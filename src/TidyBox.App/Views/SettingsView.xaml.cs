@@ -1,9 +1,11 @@
 using System.Diagnostics;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Navigation;
 using TidyBox.App.Feedback;
 using TidyBox.Core.Feedback;
+using TidyBox.Core.Gestures;
 using TidyBox.Core.Modules;
 using TidyBox.Modules.DiskAnalyzer;
 using TidyBox.Modules.Downloads;
@@ -16,11 +18,33 @@ public sealed partial class SettingsView : Page
 {
     private UninstallerModule _uninstaller = null!;
     private DownloadsModule _tidy = null!;
+    private readonly ConsecutiveTaps _versionTaps = new(required: 5, maxGap: TimeSpan.FromSeconds(3), clock: () => DateTime.UtcNow);
     private bool _showingTidyOptions; // set while the page fills the boxes itself, so ValueChanged does not act on it
 
     public SettingsView()
     {
         InitializeComponent();
+    }
+
+    // Tapping the version number five times in a row switches developer mode (see DeveloperMode). The page says how many taps are left once
+    // it is clearly on purpose, and says what happened when the fifth lands.
+    private void OnVersionTapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (_versionTaps.Tap())
+        {
+            DeveloperMode.IsEnabled = !DeveloperMode.IsEnabled;
+            ShowDeveloperState(DeveloperMode.IsEnabled ? "已开启开发者模式（连续点击版本号 5 次可关闭）" : "已关闭开发者模式");
+        }
+        else if (_versionTaps.Remaining <= 3)
+        {
+            ShowDeveloperState($"再点击 {_versionTaps.Remaining} 次{(DeveloperMode.IsEnabled ? "关闭" : "开启")}开发者模式");
+        }
+    }
+
+    private void ShowDeveloperState(string text)
+    {
+        DeveloperHint.Text = text;
+        DeveloperHint.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void ShowTidyOptions()
@@ -85,6 +109,7 @@ public sealed partial class SettingsView : Page
 
         RegistryBackupPathText.Text = _uninstaller.RegistryBackupDirectory;
         VersionText.Text = $"TidyBox {AppVersionText()}";
+        ShowDeveloperState(DeveloperMode.IsEnabled ? "开发者模式已开启（连续点击版本号 5 次可关闭）" : string.Empty);
 
         // With a feedback server configured the app can send something, but only when the user presses "发送"; the
         // privacy sentence must say so. Without one it stays as it was, because it is still true.

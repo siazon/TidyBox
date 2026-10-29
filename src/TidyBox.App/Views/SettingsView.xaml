@@ -180,7 +180,8 @@
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
                 <StackPanel Spacing="8">
-                    <TextBlock x:Name="VersionText" FontWeight="SemiBold" />
+                    <TextBlock x:Name="VersionText" FontWeight="SemiBold" Tapped="OnVersionTapped" />
+                    <TextBlock x:Name="DeveloperHint" FontSize="12" Opacity="0.7" Visibility="Collapsed" />
                     <TextBlock x:Name="PrivacyText" Text="TidyBox 不会联网，也不会收集或上传任何个人数据。" TextWrapping="Wrap" Opacity="0.7" />
                     <Button Click="OnShowThirdPartyNoticesClick" HorizontalAlignment="Left">
                         <StackPanel Orientation="Horizontal" Spacing="6">
