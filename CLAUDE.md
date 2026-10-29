@@ -1,30 +1,54 @@
-# PowerTools（PC维护工具箱）项目说明
+使用中/英文回答，夹杂英文，以提高我对英文的熟悉度
 
-## 项目是什么
+1. Think Before Coding
+Don't assume. Don't hide confusion. Surface tradeoffs.
 
-Windows Store 侧项目，面向简体中文/中国区市场。免费核心功能获客、付费Pro功能解锁的变现模式。第一个产品是"PC维护工具箱"：磁盘空间分析、右键菜单管理、卸载工具三个模块捆绑在一个App里。
+Before implementing:
 
-**权威文档，改动前先看：**
-- 产品设计文档：`docs/superpowers/specs/*.md`
-- 实现计划：`docs/superpowers/plans/*.md`
+State your assumptions explicitly. If uncertain, ask.
+If multiple interpretations exist, present them - don't pick silently.
+If a simpler approach exists, say so. Push back when warranted.
+If something is unclear, stop. Name what's confusing. Ask.
+2. Simplicity First
+Minimum code that solves the problem. Nothing speculative.
 
-## 技术栈与硬约束
+No features beyond what was asked.
+No abstractions for single-use code.
+No "flexibility" or "configurability" that wasn't requested.
+No error handling for impossible scenarios.
+If you write 200 lines and it could be 50, rewrite it.
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
-- .NET 8，WinUI3，MSIX全信任打包（`runFullTrust`）
-- **只支持 Windows 11**，不做 Windows 10 兼容
-- App本身以普通用户权限运行，不声明`requireAdministrator`；只有真正需要系统级权限的操作才临时拉起一个提权帮手进程（命名管道IPC），用完即退出
-- 不搭建对外的第三方插件分发/沙箱基础设施；内部模块按"松耦合组件、清晰接口、引擎层与UI层分离"设计，每个业务模块实现`IToolModule`接口
-- **不把GPL许可证项目的代码直接编译进本项目**（参考过的GPL项目：ContextMenuManager、ContextMenuMgr、QuickLook、tiez-clipboard——只能借鉴设计思路，自己重新实现）；优先用MIT/Apache2.0的参考实现（如BCUninstaller是Apache2.0，可直接参考甚至复用代码）
+3. Surgical Changes
+Touch only what you must. Clean up only your own mess.
 
-## 工作流约定
+When editing existing code:
 
-- 新功能走 `brainstorming` → `writing-plans` → `subagent-driven-development` 这套流程，不要跳过设计文档直接写代码
-- 每个实现计划在独立的git worktree（`.worktrees/<分支名>`）里执行，不要直接在`master`上开发
-- commit message前缀：`feat:`/`fix:`/`docs:`/`chore:`
-- 每个任务严格走TDD：先写失败的测试，确认失败，再实现，确认通过，再commit
+Don't "improve" adjacent code, comments, or formatting.
+Don't refactor things that aren't broken.
+Match existing style, even if you'd do it differently.
+If you notice unrelated dead code, mention it - don't delete it.
+When your changes create orphans:
 
-## 当前进度
+Remove imports/variables/functions that YOUR changes made unused.
+Don't remove pre-existing dead code unless asked.
+The test: Every changed line should trace directly to the user's request.
 
-- 脚手架与共享基础设施计划（`2026-10-24-pc-toolbox-scaffolding-and-shared-infra.md`）：执行中
-- 磁盘分析模块计划（`2026-10-24-pc-toolbox-disk-analyzer-module.md`）：已写好，待执行
-- 右键菜单管理、卸载工具模块：计划还没写
+4. Goal-Driven Execution
+Define success criteria. Loop until verified.
+
+Transform tasks into verifiable goals:
+
+"Add validation" → "Write tests for invalid inputs, then make them pass"
+"Fix the bug" → "Write a test that reproduces it, then make it pass"
+"Refactor X" → "Ensure tests pass before and after"
+For multi-step tasks, state a brief plan:
+
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+These guidelines are working if: fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+Before reading files: list all the information needed,fetch it all in one parallel batch of tool calls.Never make a second tool call to the same file or datasetwithout a clear reason why it couldn't be done in the first call.
