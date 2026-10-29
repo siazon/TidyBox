@@ -14,6 +14,11 @@ public interface IFileRecycler
 /// </summary>
 public sealed class ShellFileRecycler : IFileRecycler
 {
+    /// <remarks>
+    /// <see cref="UIOption.AllDialogs"/> rather than OnlyErrorDialogs: with the latter the shell runs silently, and a file too big for the
+    /// Recycle Bin (or on a drive without one) is then deleted for good without a word. With dialogs on, Windows asks first; declining
+    /// throws <see cref="OperationCanceledException"/>, which the caller reports as "not recycled".
+    /// </remarks>
     public void Delete(string filePath)
-        => FileSystem.DeleteFile(filePath, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+        => FileSystem.DeleteFile(filePath, UIOption.AllDialogs, RecycleOption.SendToRecycleBin);
 }

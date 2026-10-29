@@ -165,6 +165,8 @@ public sealed partial class DownloadsView : Page
         BusyBar.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         CancelButton.Visibility = busy && cancellable ? Visibility.Visible : Visibility.Collapsed;
         RefreshButton.IsEnabled = !busy;
+        KeptExpander.IsEnabled = !busy; // "放回" and "撤销" live in these lists: they must not run alongside another operation
+        HistoryExpander.IsEnabled = !busy;
         UpdateTidyButton();
         UpdateStaleButtons();
     }
@@ -230,29 +232,29 @@ public sealed partial class DownloadsView : Page
         var chosen = _staleRows.Where(r => r.IsChecked).Select(r => r.File).ToList();
         if (chosen.Count == 0) return;
 
-        await RunAsync(() =>
+        await RunAsync(() => Task.Run(() =>
         {
             foreach (var file in chosen) _module.Keep(file);
-            return Task.FromResult($"已保留 {chosen.Count} 个文件，它们被修改或换位置之前不会再出现在这里。");
-        });
+            return $"已保留 {chosen.Count} 个文件，它们被修改或换位置之前不会再出现在这里。";
+        }));
     }
 
     private async void OnUnkeepClick(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not StaleRow row) return;
 
-        await RunAsync(() =>
+        await RunAsync(() => Task.Run(() =>
         {
             _module.Unkeep(row.File.FullPath);
-            return Task.FromResult($"已把 {row.Name} 放回提醒列表。");
-        });
+            return $"已把 {row.Name} 放回提醒列表。";
+        }));
     }
 
     private async void OnUndoClick(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.DataContext is not BatchRow row) return;
 
-        await RunAsync(() =>
+        await RunAsync(() => Task.Run(() =>
         {
             var result = _module.Undo(row.Batch.BatchId);
             var text = $"已恢复 {result.Restored} 个文件。";
@@ -262,8 +264,8 @@ public sealed partial class DownloadsView : Page
                 text += $"{result.Skipped.Count} 个没有恢复：{Path.GetFileName(first.Entry.From)} —— {SkipText(first.Reason)}。";
             }
 
-            return Task.FromResult(text);
-        });
+            return text;
+        }));
     }
 
     // Runs an action, shows what happened, then scans again so the lists match the folder. A refused or failed action is reported, never thrown at the user.

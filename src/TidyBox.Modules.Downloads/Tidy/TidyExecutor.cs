@@ -43,13 +43,22 @@ public sealed class TidyExecutor
 
         var failures = new List<Failure>();
         var moves = new List<BatchEntry>();
-        foreach (var proposal in selected.Where(p => p.Kind == ProposalKind.Move))
+        Batch? moveBatch;
+        try
         {
-            if (MoveOne(proposal, failures) is { } entry) moves.Add(entry);
+            foreach (var proposal in selected.Where(p => p.Kind == ProposalKind.Move))
+            {
+                if (MoveOne(proposal, failures) is { } entry) moves.Add(entry);
+            }
+        }
+        finally
+        {
+            // Whatever goes wrong part-way, the files already moved are journaled, so they can still be undone.
+            moveBatch = Record(BatchKind.Move, moves);
         }
 
-        var duplicates = selected.Where(p => p.Kind == ProposalKind.RecycleDuplicate).Select(p => (p.File, p.Reason));
-        return new ExecutionResult(Record(BatchKind.Move, moves), RecycleAll(duplicates, failures), failures);
+        var duplicates = selected.Where(p => p.Kind == ProposalKind.RecycleDuplicate).Select(p => (p.File, p.Reason, IdenticalCopy: p.DestinationPath));
+        return new ExecutionResult(moveBatch, RecycleAll(duplicates, failures), failures);
     }
 
     /// <exception cref="ArgumentException">A path is outside the downloads folder; nothing was changed.</exception>
@@ -58,7 +67,7 @@ public sealed class TidyExecutor
         foreach (var file in files) RequireInsideRoot(file.FullPath);
 
         var failures = new List<Failure>();
-        var batch = RecycleAll(files.Select(file => (file, "移到回收站")), failures);
+        var batch = RecycleAll(files.Select(file => (file, "移到回收站", (string?)null)), failures);
         return new ExecutionResult(null, batch, failures);
     }
 
@@ -98,29 +107,43 @@ public sealed class TidyExecutor
             return null;
         }
 
-        _kept.Rename(source, destination);
+        try
+        {
+            _kept.Rename(source, destination);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The file is moved and will be journaled; the only cost of a kept list that could not be saved is that the file may show up in the review again.
+        }
+
         var moved = new FileInfo(destination);
         return new BatchEntry(source, destination, moved.Length, moved.LastWriteTimeUtc, proposal.Reason);
     }
 
-    private Batch? RecycleAll(IEnumerable<(DownloadFile File, string Reason)> files, List<Failure> failures)
+    // Recycling is the more destructive action, so each file is checked again right before it goes: what was true at scan time may not be now.
+    private Batch? RecycleAll(IEnumerable<(DownloadFile File, string Reason, string? IdenticalCopy)> files, List<Failure> failures)
     {
         var entries = new List<BatchEntry>();
-        foreach (var (file, reason) in files)
+        foreach (var (file, reason, identicalCopy) in files)
         {
-            if (!File.Exists(file.FullPath))
-            {
-                failures.Add(new Failure(file.FullPath, "文件已不存在"));
-                continue;
-            }
-
+            string? problem;
             try
             {
-                _recycler.Delete(file.FullPath);
+                problem = ReasonNotToRecycle(file, identicalCopy);
+                if (problem is null) _recycler.Delete(file.FullPath);
+            }
+            catch (OperationCanceledException)
+            {
+                problem = "已取消，没有移到回收站";
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                failures.Add(new Failure(file.FullPath, ex.Message));
+                problem = ex.Message;
+            }
+
+            if (problem is not null)
+            {
+                failures.Add(new Failure(file.FullPath, problem));
                 continue;
             }
 
@@ -128,6 +151,16 @@ public sealed class TidyExecutor
         }
 
         return Record(BatchKind.Recycle, entries);
+    }
+
+    private string? ReasonNotToRecycle(DownloadFile file, string? identicalCopy)
+    {
+        var info = new FileInfo(file.FullPath);
+        if (!info.Exists) return "文件已不存在";
+        if (info.Length != file.SizeBytes || info.LastWriteTimeUtc.Ticks != file.ModifiedUtc.Ticks) return "文件在扫描之后被改动过，请重新扫描";
+        if (!SafetyFilter.IsEligible(info, _clock())) return "文件正在被使用或刚刚写入，稍后再试";
+        if (identicalCopy is not null && !ContentCompare.AreSame(file.FullPath, identicalCopy)) return "目标处内容相同的那一份已不在或已改变，没有回收";
+        return null;
     }
 
     private Batch? Record(BatchKind kind, List<BatchEntry> entries)

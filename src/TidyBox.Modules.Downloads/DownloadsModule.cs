@@ -11,6 +11,8 @@ namespace TidyBox.Modules.Downloads;
 
 public sealed class DownloadsModule : IToolModule
 {
+    // Applying, recycling, undoing and (un)keeping all write the journal and the kept list, which are not safe to touch from two threads at once.
+    private readonly object _gate = new();
     private readonly Func<DateTime> _clock;
     private readonly CategoryNames _names = new();
     private readonly DownloadScanner _scanner = new();
@@ -65,7 +67,8 @@ public sealed class DownloadsModule : IToolModule
         ct.ThrowIfCancellationRequested();
 
         var proposals = _proposals.Build(DownloadsFolderPath, files);
-        var review = ReviewList.Build(files, _kept, now);
+        ReviewResult review;
+        lock (_gate) review = ReviewList.Build(files, _kept, now); // reads the kept list, which an operation may be changing
 
         var domains = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in proposals.Select(p => p.File).Concat(review.Stale).Concat(review.Kept).DistinctBy(f => f.FullPath))
@@ -80,18 +83,27 @@ public sealed class DownloadsModule : IToolModule
 
     /// <exception cref="ArgumentException">A proposal points outside the downloads folder; nothing was changed.</exception>
     public Task<ExecutionResult> ApplyAsync(IReadOnlyList<Proposal> selected, CancellationToken ct = default)
-        => Task.Run(() => _executor.Execute(selected), ct);
+        => Task.Run(() => { lock (_gate) return _executor.Execute(selected); }, ct);
 
     /// <exception cref="ArgumentException">A file is outside the downloads folder; nothing was changed.</exception>
     public Task<ExecutionResult> RecycleAsync(IReadOnlyList<DownloadFile> files, CancellationToken ct = default)
-        => Task.Run(() => _executor.Recycle(files), ct);
+        => Task.Run(() => { lock (_gate) return _executor.Recycle(files); }, ct);
 
-    public void Keep(DownloadFile file) => _kept.Keep(file);
+    public void Keep(DownloadFile file)
+    {
+        lock (_gate) _kept.Keep(file);
+    }
 
-    public bool Unkeep(string fullPath) => _kept.Unkeep(fullPath);
+    public bool Unkeep(string fullPath)
+    {
+        lock (_gate) return _kept.Unkeep(fullPath);
+    }
 
     /// <summary>Newest first.</summary>
     public IReadOnlyList<Batch> GetHistory() => _journal.LoadAll();
 
-    public UndoResult Undo(string batchId) => _undo.Undo(batchId);
+    public UndoResult Undo(string batchId)
+    {
+        lock (_gate) return _undo.Undo(batchId);
+    }
 }

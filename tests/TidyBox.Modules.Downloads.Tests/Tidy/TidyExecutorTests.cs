@@ -30,9 +30,12 @@ public class TidyExecutorTests : IDisposable
 
         public string? ThrowFor { get; set; }
 
+        public string? CancelFor { get; set; }
+
         public void Delete(string filePath)
         {
             if (filePath == ThrowFor) throw new IOException("boom");
+            if (filePath == CancelFor) throw new OperationCanceledException(); // what the shell does when the user declines its prompt
             Deleted.Add(filePath);
         }
     }
@@ -48,6 +51,7 @@ public class TidyExecutorTests : IDisposable
         var path = Path.Combine(directory ?? _root, name);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
+        File.SetLastWriteTimeUtc(path, Now - TimeSpan.FromDays(2)); // old enough that nothing counts as "just written"
         var info = new FileInfo(path);
         return new DownloadFile(path, info.Length, info.CreationTimeUtc, info.LastWriteTimeUtc, null);
     }
@@ -217,6 +221,102 @@ public class TidyExecutorTests : IDisposable
 
         Assert.Throws<ArgumentException>(() => NewExecutor().Recycle(new[] { inside, outside }));
         Assert.Empty(_recycler.Deleted);
+    }
+
+    [Fact]
+    public void Execute_KeptStoreCannotBeSaved_StillJournalsTheCompletedMoves()
+    {
+        var file = Source("a.pdf");
+        var kept = Kept;
+        kept.Keep(file);
+        var keptPath = Path.Combine(_store, "kept.json");
+        File.Delete(keptPath);
+        Directory.CreateDirectory(keptPath); // from here on, writing kept.json fails
+        var executor = new TidyExecutor(_root, Journal, kept, _recycler, () => Now);
+
+        var result = executor.Execute(new[] { Move(file) });
+
+        Assert.Equal(file.FullPath, Assert.Single(result.MoveBatch!.Entries).From);
+        Assert.Equal(result.MoveBatch.BatchId, Assert.Single(Journal.LoadAll()).BatchId);
+    }
+
+    [Fact]
+    public void Recycle_RecyclerCancelled_ReportsFailure_AndKeepsWhatWasRecycled()
+    {
+        var declined = Source("declined.exe");
+        var good = Source("good.exe");
+        _recycler.CancelFor = declined.FullPath;
+
+        var result = NewExecutor().Recycle(new[] { declined, good });
+
+        Assert.Equal(declined.FullPath, Assert.Single(result.Failures).Path);
+        Assert.Equal(good.FullPath, Assert.Single(result.RecycleBatch!.Entries).From);
+    }
+
+    [Fact]
+    public void Execute_RecycleDuplicate_IdenticalFileIsGone_DoesNotRecycle()
+    {
+        var copy = Source("b.pdf", "same");
+        var existing = Source("b.pdf", "same", Path.Combine(_root, "文档")).FullPath;
+        File.Delete(existing); // the user removed the other copy while the page was open
+
+        var result = NewExecutor().Execute(new[] { Duplicate(copy, existing) });
+
+        Assert.Empty(_recycler.Deleted);
+        Assert.Equal(copy.FullPath, Assert.Single(result.Failures).Path);
+        Assert.True(File.Exists(copy.FullPath));
+    }
+
+    [Fact]
+    public void Execute_RecycleDuplicate_OtherCopyNowDiffers_DoesNotRecycle()
+    {
+        var copy = Source("b.pdf", "same");
+        var existing = Source("b.pdf", "same", Path.Combine(_root, "文档")).FullPath;
+        File.WriteAllText(existing, "edited since");
+
+        var result = NewExecutor().Execute(new[] { Duplicate(copy, existing) });
+
+        Assert.Empty(_recycler.Deleted);
+        Assert.Single(result.Failures);
+    }
+
+    [Fact]
+    public void Recycle_FileChangedSinceScan_IsNotRecycled()
+    {
+        var grown = Source("grown.exe");
+        var retimed = Source("retimed.exe");
+        File.AppendAllText(grown.FullPath, "more");                                          // size changed
+        File.SetLastWriteTimeUtc(retimed.FullPath, Now - TimeSpan.FromDays(5));            // only the time changed
+
+        var result = NewExecutor().Recycle(new[] { grown, retimed });
+
+        Assert.Empty(_recycler.Deleted);
+        Assert.Equal(2, result.Failures.Count);
+    }
+
+    [Fact]
+    public void Recycle_FileWrittenMinutesAgo_IsNotRecycled()
+    {
+        var fresh = Source("fresh.exe");
+        var justNow = Now - TimeSpan.FromMinutes(1);
+        File.SetLastWriteTimeUtc(fresh.FullPath, justNow);
+
+        var result = NewExecutor().Recycle(new[] { fresh with { ModifiedUtc = justNow } });
+
+        Assert.Empty(_recycler.Deleted);
+        Assert.Single(result.Failures);
+    }
+
+    [Fact]
+    public void Recycle_FileHeldOpenByAnotherProgram_IsNotRecycled()
+    {
+        var busy = Source("busy.exe");
+        using var held = new FileStream(busy.FullPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        var result = NewExecutor().Recycle(new[] { busy });
+
+        Assert.Empty(_recycler.Deleted);
+        Assert.Single(result.Failures);
     }
 
     [Fact]

@@ -167,6 +167,39 @@ public class DownloadsModuleWorkflowTests : IDisposable
         Assert.Equal(BatchKind.Recycle, Assert.Single(_module.GetHistory()).Kind);
     }
 
+    private sealed class BlockingRecycler : IFileRecycler
+    {
+        public ManualResetEventSlim Entered { get; } = new();
+
+        public ManualResetEventSlim Release { get; } = new();
+
+        public void Delete(string filePath)
+        {
+            Entered.Set();
+            Release.Wait(TimeSpan.FromSeconds(10));
+        }
+    }
+
+    [Fact]
+    public async Task Keep_WaitsForARunningOperation_SoTheyNeverRaceOnTheSameFiles()
+    {
+        var path = Make("old.exe", "old", 200);
+        var blocking = new BlockingRecycler();
+        var module = new DownloadsModule(_root, _store, blocking, () => Now);
+        var file = Assert.Single((await module.ScanAsync()).Stale);
+
+        var recycling = module.RecycleAsync(new[] { file });
+        Assert.True(blocking.Entered.Wait(TimeSpan.FromSeconds(5)));
+
+        var keeping = Task.Run(() => module.Keep(file));
+        Assert.False(keeping.Wait(TimeSpan.FromMilliseconds(300))); // held back while the recycle runs
+
+        blocking.Release.Set();
+        await recycling;
+        Assert.True(keeping.Wait(TimeSpan.FromSeconds(5)));
+        Assert.True(File.Exists(path));
+    }
+
     [Fact]
     public async Task ApplyAsync_WithProposalOutsideFolder_Throws_AndChangesNothing()
     {

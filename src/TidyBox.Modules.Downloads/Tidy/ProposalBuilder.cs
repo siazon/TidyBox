@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using TidyBox.Modules.Downloads.Rules;
 using TidyBox.Modules.Downloads.Scanning;
@@ -34,7 +33,7 @@ public sealed class ProposalBuilder
         var folder = Path.Combine(downloadsRoot, folderName);
         var desired = Path.Combine(folder, file.Name);
 
-        if (Path.Exists(desired) && SameContent(file, desired))
+        if (Path.Exists(desired) && ContentCompare.AreSame(file.FullPath, desired))
         {
             return new Proposal(file, ProposalKind.RecycleDuplicate, category.Id, desired, "目标已有内容相同的文件", false, suspicious);
         }
@@ -58,24 +57,6 @@ public sealed class ProposalBuilder
         {
             var candidate = Path.Combine(folder, $"{stem} ({n}){extension}");
             if (!Path.Exists(candidate) && !reserved.Contains(candidate)) return candidate;
-        }
-    }
-
-    // Compares sizes first and only hashes when they match. Unreadable files count as different: that errs towards a suffix, never towards a recycle suggestion.
-    private static bool SameContent(DownloadFile file, string existingPath)
-    {
-        try
-        {
-            var existing = new FileInfo(existingPath);
-            if (!existing.Exists || existing.Length != file.SizeBytes) return false;
-
-            using var source = File.OpenRead(file.FullPath);
-            using var other = existing.OpenRead();
-            return SHA256.HashData(source).AsSpan().SequenceEqual(SHA256.HashData(other));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return false;
         }
     }
 }
