@@ -37,6 +37,8 @@
     <!-- PNG assets are picked up by default; SVG and ICO are not. The icon is shown next to the Explorer right-click entries. -->
     <Content Include="Assets\app-placeholder.svg" />
     <Content Include="Assets\PowerTools.ico" />
+    <!-- The word list the Vocab page loads until the user picks another one. -->
+    <Content Include="Assets\Vocab\NGSL_1.2.json" />
     <!-- Shown from the Settings page; lives at the repo root, not under this project, so it needs an explicit Link. -->
     <Content Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
