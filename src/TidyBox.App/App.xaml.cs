@@ -39,12 +39,15 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += (_, e) => AppLog.Default.Error("unhandled", "AppDomain.UnhandledException", e.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, e) => AppLog.Default.Error("unhandled", "UnobservedTaskException", e.Exception);
 
+        // The order of registration is the order of the navigation menu.
         Modules.Register(new DiskAnalyzerModule());
+        Modules.Register(new DownloadsModule(downloadsFolder: TidyFolderSettings.ExistingPath, options: TidyOptionsSettings.Current));
+        Modules.Register(new UninstallerModule());
 
         // The icon sits in the install folder, which has the version in its name; the module repoints the menu after updates.
         Modules.Register(new ContextMenuModule(analyzeIcon: Path.Combine(AppContext.BaseDirectory, "Assets", "TidyBox.ico")));
-        Modules.Register(new UninstallerModule());
-        Modules.Register(new DownloadsModule(downloadsFolder: TidyFolderSettings.ExistingPath, options: TidyOptionsSettings.Current));
+
+        // Developer mode only (see DeveloperMode): hidden from the menu, and its taskbar strip not shown, while that is off.
         Modules.Register(Vocab);
     }
 
@@ -148,7 +151,22 @@ public partial class App : Application
         };
 
         main.Activate();
-        RestoreVocabStrip();
+        if (DeveloperMode.IsEnabled) RestoreVocabStrip();
+
+        // Turning developer mode off takes the strip down at once; turning it on brings it back if the user had it showing. Their own
+        // "show on taskbar" choice (VocabSettings.Enabled) is left as it was.
+        DeveloperMode.Changed += () =>
+        {
+            if (DeveloperMode.IsEnabled)
+            {
+                RestoreVocabStrip();
+            }
+            else
+            {
+                VocabStrip.Hide();
+                Vocab.Stop();
+            }
+        };
     }
 
     // Loads the saved word list, or the bundled one until the user picks another, and brings the strip back if it was

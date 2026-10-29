@@ -23,6 +23,26 @@ public class ModuleRegistryTests
     }
 
     [Fact]
+    public void GetAll_ReturnsModulesInRegistrationOrder_WhichIsTheOrderOfTheNavigationMenu()
+    {
+        var registry = new ModuleRegistry();
+        foreach (var id in new[] { "disk", "tidy", "uninstall", "context-menu", "vocab" }) registry.Register(new FakeModule(id, id));
+
+        Assert.Equal(new[] { "disk", "tidy", "uninstall", "context-menu", "vocab" }, registry.GetAll().Select(m => m.ModuleId));
+    }
+
+    [Fact]
+    public void Register_SameIdTwice_KeepsTheEarlierPosition()
+    {
+        var registry = new ModuleRegistry();
+        registry.Register(new FakeModule("a", "old"));
+        registry.Register(new FakeModule("b", "b"));
+        registry.Register(new FakeModule("a", "new"));
+
+        Assert.Equal(new[] { "new", "b" }, registry.GetAll().Select(m => m.DisplayName));
+    }
+
+    [Fact]
     public void GetById_KnownId_ReturnsModule()
     {
         var registry = new ModuleRegistry();

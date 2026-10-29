@@ -29,12 +29,19 @@ public sealed partial class MainWindow : Window
         ["vocab"] = "\uE8F1",         // Library
     };
 
+    // Modules that only show in the menu while developer mode is on.
+    private static readonly HashSet<string> DeveloperModules = new() { "vocab" };
+
     private readonly ModuleRegistry _registry;
 
     public MainWindow(ModuleRegistry registry)
     {
         _registry = registry;
         InitializeComponent();
+
+        Action onDeveloperModeChanged = () => DispatcherQueue.TryEnqueue(ApplyDeveloperModeToMenu);
+        DeveloperMode.Changed += onDeveloperModeChanged;
+        Closed += (_, _) => DeveloperMode.Changed -= onDeveloperModeChanged;
 
         // The icon at the top left of the window (and on its taskbar button).
         var icon = Path.Combine(AppContext.BaseDirectory, "Assets", "TidyBox.ico");
@@ -89,6 +96,7 @@ public sealed partial class MainWindow : Window
                 await module.InitializeAsync();
                 var item = new NavigationViewItem { Content = module.DisplayName, Tag = module.ModuleId };
                 if (ModuleIcons.TryGetValue(module.ModuleId, out var glyph)) item.Icon = new FontIcon { Glyph = glyph };
+                if (DeveloperModules.Contains(module.ModuleId)) item.Visibility = DeveloperMode.IsEnabled ? Visibility.Visible : Visibility.Collapsed;
                 Nav.MenuItems.Add(item);
             }
             catch (Exception ex)
@@ -114,6 +122,14 @@ public sealed partial class MainWindow : Window
 
         // Otherwise the user lands on the "No modules loaded." placeholder although modules did load.
         Nav.SelectedItem ??= Nav.MenuItems.OfType<NavigationViewItem>().FirstOrDefault(item => item.IsEnabled);
+    }
+
+    private void ApplyDeveloperModeToMenu()
+    {
+        foreach (var item in Nav.MenuItems.OfType<NavigationViewItem>().Where(i => i.Tag is string id && DeveloperModules.Contains(id)))
+        {
+            item.Visibility = DeveloperMode.IsEnabled ? Visibility.Visible : Visibility.Collapsed;
+        }
     }
 
     private void OnSelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
