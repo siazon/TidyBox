@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Navigation;
 using TidyBox.Modules.DiskAnalyzer;
 using TidyBox.Modules.Downloads;
@@ -27,6 +28,43 @@ public sealed partial class DownloadsView : Page
     public DownloadsView()
     {
         InitializeComponent();
+        WirePageScroll(StaleList);
+        WirePageScroll(KeptList);
+        WirePageScroll(HistoryList);
+    }
+
+    // Each list scrolls inside its own box. Its ScrollViewer takes the mouse wheel even when it has nothing left to scroll, so the page
+    // would stop moving whenever the pointer is over a list. When the list is already at the end the wheel is heading for, pass it on to the page.
+    private void WirePageScroll(ListView list)
+        => list.AddHandler(UIElement.PointerWheelChangedEvent, new PointerEventHandler(OnListWheel), handledEventsToo: true);
+
+    private void OnListWheel(object sender, PointerRoutedEventArgs e)
+    {
+        // Only when the list's own ScrollViewer has taken the event: otherwise the page's ScrollViewer gets it anyway, and passing it on too would scroll twice.
+        if (!e.Handled || sender is not ListView list || FindScrollViewer(list) is not { } inner) return;
+
+        var point = e.GetCurrentPoint(list).Properties;
+        if (point.IsHorizontalMouseWheel) return;
+
+        var delta = point.MouseWheelDelta;
+        var atTop = inner.VerticalOffset <= 0.5;
+        var atBottom = inner.VerticalOffset >= inner.ScrollableHeight - 0.5;
+        if (!((delta > 0 && atTop) || (delta < 0 && atBottom))) return;
+
+        PageScroll.ChangeView(null, PageScroll.VerticalOffset - delta, null, disableAnimation: true);
+        e.Handled = true;
+    }
+
+    private static ScrollViewer? FindScrollViewer(DependencyObject parent)
+    {
+        for (var i = 0; i < Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, i);
+            if (child is ScrollViewer viewer) return viewer;
+            if (FindScrollViewer(child) is { } found) return found;
+        }
+
+        return null;
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
@@ -144,14 +182,16 @@ public sealed partial class DownloadsView : Page
         foreach (var group in groups)
         {
             GroupsPanel.Children.Add(new TextBlock { Text = $"{group.Title}（{group.Rows.Count}）", FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, Margin = new Thickness(0, 8, 0, 0) });
-            GroupsPanel.Children.Add(new ListView
+            var list = new ListView
             {
                 SelectionMode = ListViewSelectionMode.None,
                 MaxHeight = 260,
                 ItemTemplate = (DataTemplate)Resources["ProposalTemplate"],
                 ItemContainerStyle = (Style)Resources["StretchItemStyle"],
                 ItemsSource = group.Rows,
-            });
+            };
+            WirePageScroll(list);
+            GroupsPanel.Children.Add(list);
         }
 
         TidyTitle.Text = $"① 可以整理的（{_proposalRows.Count(r => r.CanCheck)}）";
