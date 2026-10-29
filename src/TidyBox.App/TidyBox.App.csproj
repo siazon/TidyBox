@@ -23,6 +23,7 @@
     <ProjectReference Include="..\TidyBox.Modules.ContextMenu\TidyBox.Modules.ContextMenu.csproj" />
     <ProjectReference Include="..\TidyBox.Modules.Uninstaller\TidyBox.Modules.Uninstaller.csproj" />
     <ProjectReference Include="..\TidyBox.Modules.Vocab\TidyBox.Modules.Vocab.csproj" />
+    <ProjectReference Include="..\TidyBox.Modules.Downloads\TidyBox.Modules.Downloads.csproj" />
     <ProjectReference Include="..\TidyBox.ElevatedHelper\TidyBox.ElevatedHelper.csproj" ReferenceOutputAssembly="false" OutputItemType="ElevatedHelperAssembly" />
   </ItemGroup>
 
