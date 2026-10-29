@@ -139,12 +139,5 @@ public sealed class TidyExecutor
         return batch;
     }
 
-    private void RequireInsideRoot(string path)
-    {
-        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(_downloadsRoot)) + Path.DirectorySeparatorChar;
-        if (!Path.GetFullPath(path).StartsWith(root, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new ArgumentException($"'{path}' is not inside the downloads folder.", nameof(path));
-        }
-    }
+    private void RequireInsideRoot(string path) => PathGuard.RequireInside(_downloadsRoot, path);
 }
