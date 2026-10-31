@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-31-tidy-profiles-design.md`
 
+**状态：暂不执行。** 这是计划中的 Pro 功能，等第一版上架并有用户后再开发。开始前要先补一份授权/购买判断的设计（本计划不含），并重新核对下面引用的行号和接口是否还对得上代码。
+
 ## Global Constraints
 
 - 强度范围沿用 `TidyOptions.Create`：天数 1–3650，分钟 0–1440。
