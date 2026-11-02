@@ -3,6 +3,7 @@ using TidyBox.Core.Modules;
 using TidyBox.Modules.ContextMenu.Analyze;
 using TidyBox.Modules.ContextMenu.Catalog;
 using TidyBox.Modules.ContextMenu.Classic;
+using TidyBox.Modules.ContextMenu.Compress;
 using TidyBox.Modules.ContextMenu.Hives;
 using TidyBox.Modules.ContextMenu.Model;
 using TidyBox.Modules.ContextMenu.Naming;
@@ -21,6 +22,7 @@ public sealed class ContextMenuModule : IToolModule
     private readonly MenuToggler _toggler;
     private readonly ClassicMenuSwitch _classicMenu;
     private readonly AnalyzeFolderMenu _analyzeMenu;
+    private readonly CompressToMenu _compressMenu;
     private readonly IExplorerRestarter _restarter;
 
     /// <param name="analyzeExecutable">What the "analyze this folder" menu entries start; defaults to the app's execution alias.</param>
@@ -33,6 +35,7 @@ public sealed class ContextMenuModule : IToolModule
         _toggler = new MenuToggler(_roots);
         _classicMenu = new ClassicMenuSwitch(_roots);
         _analyzeMenu = new AnalyzeFolderMenu(_roots, analyzeExecutable ?? DefaultAnalyzeExecutable, icon: analyzeIcon);
+        _compressMenu = new CompressToMenu(_roots);
         _restarter = restarter ?? new ExplorerRestarter();
     }
 
@@ -106,6 +109,12 @@ public sealed class ContextMenuModule : IToolModule
     public bool IsAnalyzeMenuEnabled => _analyzeMenu.IsEnabled;
 
     public ToggleResult SetAnalyzeMenu(bool enabled) => _analyzeMenu.SetEnabled(enabled);
+
+    public bool IsCompressMenuAvailable => _compressMenu.IsAvailable;
+
+    public bool IsCompressMenuEnabled => _compressMenu.IsEnabled;
+
+    public ToggleResult SetCompressMenu(bool enabled) => _compressMenu.SetEnabled(enabled);
 
     public Task RestartExplorerAsync(CancellationToken ct = default) => _restarter.RestartAsync(ct);
 }

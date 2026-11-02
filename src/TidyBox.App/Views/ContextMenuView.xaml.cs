@@ -28,6 +28,11 @@ public sealed partial class ContextMenuView : Page
         _module = (ContextMenuModule)e.Parameter;
         SetClassicSwitch(_module.IsClassicMenuEnabled);
         SetAnalyzeSwitch(_module.IsAnalyzeMenuEnabled);
+        SetCompressSwitch(_module.IsCompressMenuEnabled);
+
+        // A Windows without the system commands has nothing to put in the submenu; say so instead of a switch that fails.
+        CompressSwitch.IsEnabled = _module.IsCompressMenuAvailable;
+        if (!_module.IsCompressMenuAvailable) CompressHint.Text = "这个版本的 Windows 没有自带的“压缩到”命令，无法添加。";
         _ = LoadAsync();
     }
 
@@ -194,6 +199,31 @@ public sealed partial class ContextMenuView : Page
         }
 
         // The entries are verbs like any other, so they appear in (or leave) the list below.
+        await LoadAsync();
+    }
+
+    private bool _settingCompressSwitch;
+
+    private void SetCompressSwitch(bool on)
+    {
+        _settingCompressSwitch = true;
+        CompressSwitch.IsOn = on;
+        _settingCompressSwitch = false;
+    }
+
+    private async void OnCompressToggled(object sender, RoutedEventArgs e)
+    {
+        if (_settingCompressSwitch) return;
+
+        var result = _module.SetCompressMenu(CompressSwitch.IsOn);
+        if (!result.Success)
+        {
+            StatusText.Text = $"无法更改“压缩到”菜单：{result.Error}";
+            SetCompressSwitch(_module.IsCompressMenuEnabled);
+            return;
+        }
+
+        // Like the analyze entries, it is a verb that shows up in (or leaves) the list below.
         await LoadAsync();
     }
 

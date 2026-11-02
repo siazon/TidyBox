@@ -57,6 +57,25 @@
                               AutomationProperties.Name="在右键菜单中添加分析此文件夹" />
             </Grid>
         </Border>
+
+        <Border Padding="16,12" CornerRadius="6" BorderThickness="1"
+                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Spacing="2" VerticalAlignment="Center">
+                    <TextBlock Text="在经典右键菜单中添加“压缩到”" FontWeight="SemiBold" />
+                    <TextBlock x:Name="CompressHint"
+                               Text="Windows 11 只在新的右键菜单里有“压缩到”。开启后，经典右键菜单（“显示更多选项”）里文件和文件夹也会出现“压缩到”，可以选 ZIP、7z、TAR 等格式；压缩由 Windows 自带的命令完成。立即生效，不需要重启资源管理器。这里的设置保存在 Windows 注册表中，卸载本应用不会自动删除；要移除请先在这里关闭。"
+                               TextWrapping="Wrap" Opacity="0.7" />
+                </StackPanel>
+                <ToggleSwitch x:Name="CompressSwitch" Grid.Column="1" OnContent="已开启" OffContent="已关闭" Toggled="OnCompressToggled"
+                              AutomationProperties.Name="在经典右键菜单中添加压缩到" />
+            </Grid>
+        </Border>
         </StackPanel>
 
         <InfoBar x:Name="RestartHint" Grid.Row="1" IsOpen="False" Severity="Informational" Title="需要重启资源管理器"
