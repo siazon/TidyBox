@@ -33,7 +33,7 @@ $makeappx = Join-Path $sdkBin.FullName 'x64\makeappx.exe'
 $signtool = Join-Path $sdkBin.FullName 'x64\signtool.exe'
 
 Write-Host "--- build ($Platform, self-contained)"
-dotnet build (Join-Path $root 'src\TidyBox.App') -c Release "-p:Platform=$Platform" -r $rid --self-contained true -p:WindowsAppSDKSelfContained=true
+dotnet build (Join-Path $root 'src\TidyBox.App') -c Release "-p:Platform=$Platform" -r $rid --self-contained true -p:WindowsAppSDKSelfContained=true -p:ExcludeBundledWordList=true
 if ($LASTEXITCODE -ne 0) { throw "dotnet build failed ($LASTEXITCODE)" }
 
 $recipe = Get-ChildItem (Join-Path $root "src\TidyBox.App\bin\$Platform") -Recurse -Filter 'TidyBox.App.build.appxrecipe' |

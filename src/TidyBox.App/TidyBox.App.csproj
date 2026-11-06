@@ -40,6 +40,8 @@
     <Content Include="Assets\TidyBox.ico" />
     <!-- The word list the Vocab page loads until the user picks another one. -->
     <Content Include="Assets\Vocab\NGSL_1.2.json" />
+    <!-- Store packages leave the word list out (its definitions have no clear license); scripts\package-msix.ps1 sets this. -->
+    <Content Remove="Assets\Vocab\NGSL_1.2.json" Condition="'$(ExcludeBundledWordList)' == 'true'" />
     <!-- Shown from the Settings page; lives at the repo root, not under this project, so it needs an explicit Link. -->
     <Content Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
